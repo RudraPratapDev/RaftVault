@@ -1,0 +1,10 @@
+2026/03/28 21:44:08 =================================================
+2026/03/28 21:44:08   RaftKMS Node: node1
+2026/03/28 21:44:08   Address:      localhost:5001
+2026/03/28 21:44:08   Peers:        [localhost:5002 localhost:5003]
+2026/03/28 21:44:08   Data Dir:     ./data/node1
+2026/03/28 21:44:08 =================================================
+2026/03/28 21:44:08 [RAFT] Node node1 started | Term=0 | Log length=0
+2026/03/28 21:44:08 [MAIN] Node node1 is running. Press Ctrl+C to stop.
+2026/03/28 21:44:08 [API] HTTP server starting on localhost:5001
+2026/03/28 21:44:09 [VOTE] Node node1: Voted for node2 in Term 1

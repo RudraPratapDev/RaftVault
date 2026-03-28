@@ -1,0 +1,13 @@
+2026/03/28 21:44:08 =================================================
+2026/03/28 21:44:08   RaftKMS Node: node2
+2026/03/28 21:44:08   Address:      localhost:5002
+2026/03/28 21:44:08   Peers:        [localhost:5001 localhost:5003]
+2026/03/28 21:44:08   Data Dir:     ./data/node2
+2026/03/28 21:44:08 =================================================
+2026/03/28 21:44:08 [RAFT] Node node2 started | Term=0 | Log length=0
+2026/03/28 21:44:08 [MAIN] Node node2 is running. Press Ctrl+C to stop.
+2026/03/28 21:44:08 [API] HTTP server starting on localhost:5002
+2026/03/28 21:44:09 [ELECTION] Node node2 starting election for Term 1
+2026/03/28 21:44:09 [ELECTION] Node node2: Received vote from localhost:5003 for Term 1
+2026/03/28 21:44:09 [LEADER] 🎉 Node node2 became LEADER for Term 1
+2026/03/28 21:44:09 [ELECTION] Node node2: Received vote from localhost:5001 for Term 1
