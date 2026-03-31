@@ -3,9 +3,11 @@ package main
 import (
 	"flag"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"syscall"
 	"time"
 
@@ -17,12 +19,30 @@ import (
 	"raft-kms/internal/storage"
 )
 
+func setupLogger(nodeID string, logDir string) (*os.File, error) {
+	if err := os.MkdirAll(logDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create log dir: %w", err)
+	}
+	logPath := filepath.Join(logDir, nodeID+".log")
+	// Open in append mode so logs persist across restarts
+	f, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+	if err != nil {
+		return nil, fmt.Errorf("failed to open log file: %w", err)
+	}
+	// Tee to both file and stdout
+	mw := io.MultiWriter(os.Stdout, f)
+	log.SetOutput(mw)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lmicroseconds)
+	return f, nil
+}
+
 func main() {
 	configPath := flag.String("config", "", "Path to config file (JSON)")
+	logDir := flag.String("log-dir", "./logs", "Directory for persistent log files")
 	flag.Parse()
 
 	if *configPath == "" {
-		fmt.Fprintf(os.Stderr, "Usage: raft-kms --config <path-to-config.json>\n")
+		fmt.Fprintf(os.Stderr, "Usage: raft-kms --config <path-to-config.json> [--log-dir ./logs]\n")
 		os.Exit(1)
 	}
 
@@ -32,11 +52,21 @@ func main() {
 		log.Fatalf("Failed to load config: %v", err)
 	}
 
+	// Setup persistent logger (append mode — survives restarts)
+	logFile, err := setupLogger(cfg.NodeID, *logDir)
+	if err != nil {
+		log.Printf("[WARN] Could not open log file, logging to stdout only: %v", err)
+	} else {
+		defer logFile.Close()
+	}
+
 	log.Printf("=================================================")
-	log.Printf("  RaftKMS Node: %s", cfg.NodeID)
+	log.Printf("  RaftKMS Node: %s  [RESTART/START]", cfg.NodeID)
 	log.Printf("  Address:      %s", cfg.Address)
 	log.Printf("  Peers:        %v", cfg.Peers)
 	log.Printf("  Data Dir:     %s", cfg.DataDir)
+	log.Printf("  Log File:     %s/%s.log", *logDir, cfg.NodeID)
+	log.Printf("  Started At:   %s", time.Now().Format(time.RFC3339))
 	log.Printf("=================================================")
 
 	// Initialize storage
@@ -62,8 +92,8 @@ func main() {
 	// Initialize chaos module
 	chaosModule := chaos.NewChaosModule()
 
-	// Initialize event log
-	eventLog := raft.NewEventLog(500)
+	// Initialize event log (larger buffer for demo)
+	eventLog := raft.NewEventLog(1000)
 
 	// Connect KMS as the state machine
 	raftNode.SetApplyFunc(kmsStore.Apply)
@@ -95,7 +125,7 @@ func main() {
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
 	<-sigCh
 
-	log.Printf("[MAIN] Shutting down node %s...", cfg.NodeID)
+	log.Printf("[MAIN] Shutting down node %s at %s...", cfg.NodeID, time.Now().Format(time.RFC3339))
 	raftNode.Stop()
-	log.Printf("[MAIN] Node %s stopped.", cfg.NodeID)
+	log.Printf("[MAIN] Node %s stopped cleanly.", cfg.NodeID)
 }

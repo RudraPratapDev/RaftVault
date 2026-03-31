@@ -1,10 +1,308 @@
-2026/03/28 21:44:08 =================================================
-2026/03/28 21:44:08   RaftKMS Node: node3
-2026/03/28 21:44:08   Address:      localhost:5003
-2026/03/28 21:44:08   Peers:        [localhost:5001 localhost:5002]
-2026/03/28 21:44:08   Data Dir:     ./data/node3
-2026/03/28 21:44:08 =================================================
-2026/03/28 21:44:08 [RAFT] Node node3 started | Term=0 | Log length=0
-2026/03/28 21:44:08 [MAIN] Node node3 is running. Press Ctrl+C to stop.
-2026/03/28 21:44:08 [API] HTTP server starting on localhost:5003
-2026/03/28 21:44:09 [VOTE] Node node3: Voted for node2 in Term 1
+2026/03/31 18:38:20.479439 =================================================
+2026/03/31 18:38:20.479439 =================================================
+2026/03/31 18:38:20.479876   RaftKMS Node: node3  [RESTART/START]
+2026/03/31 18:38:20.479876   RaftKMS Node: node3  [RESTART/START]
+2026/03/31 18:38:20.479890   Address:      localhost:5003
+2026/03/31 18:38:20.479890   Address:      localhost:5003
+2026/03/31 18:38:20.479899   Peers:        [localhost:5001 localhost:5002]
+2026/03/31 18:38:20.479899   Peers:        [localhost:5001 localhost:5002]
+2026/03/31 18:38:20.480044   Data Dir:     ./data/node3
+2026/03/31 18:38:20.480044   Data Dir:     ./data/node3
+2026/03/31 18:38:20.480052   Log File:     /Users/rudrapratapsinghtomar/Desktop/WORKspace/distProject/logs/node3.log
+2026/03/31 18:38:20.480052   Log File:     /Users/rudrapratapsinghtomar/Desktop/WORKspace/distProject/logs/node3.log
+2026/03/31 18:38:20.480072   Started At:   2026-03-31T18:38:20+05:30
+2026/03/31 18:38:20.480072   Started At:   2026-03-31T18:38:20+05:30
+2026/03/31 18:38:20.480080 =================================================
+2026/03/31 18:38:20.480080 =================================================
+2026/03/31 18:38:20.480159 [RAFT] Node node3 started | Term=0 | VotedFor="" | LogLen=0 | Recovering committed entries...
+2026/03/31 18:38:20.480159 [RAFT] Node node3 started | Term=0 | VotedFor="" | LogLen=0 | Recovering committed entries...
+2026/03/31 18:38:20.480237 [MAIN] Node node3 is running. Press Ctrl+C to stop.
+2026/03/31 18:38:20.480237 [MAIN] Node node3 is running. Press Ctrl+C to stop.
+2026/03/31 18:38:20.480496 [API] HTTP server starting on localhost:5003
+2026/03/31 18:38:20.480496 [API] HTTP server starting on localhost:5003
+2026/03/31 18:38:22.065822 [VOTE] Node node3: Granted vote to node2 for Term 1 | candidate log up-to-date ✓
+2026/03/31 18:38:22.065822 [VOTE] Node node3: Granted vote to node2 for Term 1 | candidate log up-to-date ✓
+2026/03/31 18:40:19.639836 [ELECTION] ⚡ Node node3 timed out waiting for heartbeat — starting election | Term=2 | LogLen=0 | Need=2/3 votes
+2026/03/31 18:40:19.639836 [ELECTION] ⚡ Node node3 timed out waiting for heartbeat — starting election | Term=2 | LogLen=0 | Need=2/3 votes
+2026/03/31 18:40:19.640233 [ELECTION] Node node3: Voted for self (1/2). Requesting votes from peers: [localhost:5001 localhost:5002]
+2026/03/31 18:40:19.640233 [ELECTION] Node node3: Voted for self (1/2). Requesting votes from peers: [localhost:5001 localhost:5002]
+2026/03/31 18:40:19.640475 [ELECTION] Node node3 → localhost:5002: Sending RequestVote | Term=2 LastLogIndex=0 LastLogTerm=0
+2026/03/31 18:40:19.640475 [ELECTION] Node node3 → localhost:5002: Sending RequestVote | Term=2 LastLogIndex=0 LastLogTerm=0
+2026/03/31 18:40:19.640528 [ELECTION] Node node3 → localhost:5001: Sending RequestVote | Term=2 LastLogIndex=0 LastLogTerm=0
+2026/03/31 18:40:19.640528 [ELECTION] Node node3 → localhost:5001: Sending RequestVote | Term=2 LastLogIndex=0 LastLogTerm=0
+2026/03/31 18:40:19.643527 [ELECTION] Node node3 ← localhost:5002: Vote DENIED ✗ | peer's term=0
+2026/03/31 18:40:19.643527 [ELECTION] Node node3 ← localhost:5002: Vote DENIED ✗ | peer's term=0
+2026/03/31 18:40:19.646400 [ELECTION] Node node3 ← localhost:5001: Vote GRANTED ✓ | Votes=2/3 (need 2)
+2026/03/31 18:40:19.646400 [ELECTION] Node node3 ← localhost:5001: Vote GRANTED ✓ | Votes=2/3 (need 2)
+2026/03/31 18:40:19.646482 [ELECTION] Node node3: Won election with majority votes! Becoming LEADER for Term 2
+2026/03/31 18:40:19.646482 [ELECTION] Node node3: Won election with majority votes! Becoming LEADER for Term 2
+2026/03/31 18:40:19.646510 [LEADER] 🎉 Node node3 became LEADER for Term 2 | LogLen=0 | Peers=[localhost:5001 localhost:5002]
+2026/03/31 18:40:19.646510 [LEADER] 🎉 Node node3 became LEADER for Term 2 | LogLen=0 | Peers=[localhost:5001 localhost:5002]
+2026/03/31 18:40:19.647180 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:19.647180 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:20.147784 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:20.147784 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:20.648351 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:20.648351 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:21.148578 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:21.148578 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:21.648054 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:21.648054 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:22.148175 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:22.148175 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:22.648525 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:22.648525 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:23.148279 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:23.148279 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:23.648558 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:23.648558 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:24.148169 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:24.148169 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:24.647990 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:24.647990 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:25.148562 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:25.148562 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:25.648521 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:25.648521 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:26.148124 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:26.148124 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:26.648033 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:26.648033 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:27.148301 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:27.148301 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:27.647980 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:27.647980 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:28.148356 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:28.148356 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:28.647929 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:28.647929 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:29.148248 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:29.148248 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:29.647633 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:29.647633 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:30.147936 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:30.147936 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:30.648404 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:30.648404 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:31.148287 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:31.148287 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:31.648251 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:31.648251 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:32.149089 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:32.149089 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:32.648140 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:32.648140 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:33.147916 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:33.147916 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:33.648051 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:33.648051 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:34.148020 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:34.148020 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:34.648007 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:34.648007 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:35.148106 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:35.148106 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:35.647860 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:35.647860 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:36.149885 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:36.149885 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:36.647391 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:36.647391 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:37.147692 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:37.147692 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:37.647733 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:37.647733 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:38.147445 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:38.147445 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:38.647791 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:40:38.647791 [RPC] AppendEntries to localhost:5002 returned status 503
+2026/03/31 18:41:18.241794 [RAFT] Leader node3: Appended entry Index=1 Term=2 Action=CREATE_KEY
+2026/03/31 18:41:18.241794 [RAFT] Leader node3: Appended entry Index=1 Term=2 Action=CREATE_KEY
+2026/03/31 18:41:18.243763 [REPLICATION] Leader node3 → localhost:5001: Replicated 1 entries | matchIndex=1 | nextIndex=2
+2026/03/31 18:41:18.243763 [REPLICATION] Leader node3 → localhost:5001: Replicated 1 entries | matchIndex=1 | nextIndex=2
+2026/03/31 18:41:18.243814 [COMMIT] Leader node3: Entry Index=1 replicated on 2/3 nodes — COMMITTED ✓
+2026/03/31 18:41:18.243814 [COMMIT] Leader node3: Entry Index=1 replicated on 2/3 nodes — COMMITTED ✓
+2026/03/31 18:41:18.243852 [APPLY] Node node3: Applying entry Index=1 Term=2 Action=CREATE_KEY | lastApplied=1 commitIndex=1
+2026/03/31 18:41:18.243852 [APPLY] Node node3: Applying entry Index=1 Term=2 Action=CREATE_KEY | lastApplied=1 commitIndex=1
+2026/03/31 18:41:18.244117 [KMS] Created key: alice
+2026/03/31 18:41:18.244117 [KMS] Created key: alice
+2026/03/31 18:41:18.244162 [TEST/DEMO] Key created via demo endpoint: alice
+2026/03/31 18:41:18.244162 [TEST/DEMO] Key created via demo endpoint: alice
+2026/03/31 18:41:18.244187 [REPLICATION] Leader node3 → localhost:5002: Replicated 1 entries | matchIndex=1 | nextIndex=2
+2026/03/31 18:41:18.244187 [REPLICATION] Leader node3 → localhost:5002: Replicated 1 entries | matchIndex=1 | nextIndex=2
+2026/03/31 18:42:38.951143 [RAFT] Leader node3: Appended entry Index=2 Term=2 Action=CREATE_KEY
+2026/03/31 18:42:38.951143 [RAFT] Leader node3: Appended entry Index=2 Term=2 Action=CREATE_KEY
+2026/03/31 18:42:38.953871 [REPLICATION] Leader node3 → localhost:5001: Replicated 1 entries | matchIndex=2 | nextIndex=3
+2026/03/31 18:42:38.953871 [REPLICATION] Leader node3 → localhost:5001: Replicated 1 entries | matchIndex=2 | nextIndex=3
+2026/03/31 18:42:38.953960 [COMMIT] Leader node3: Entry Index=2 replicated on 2/3 nodes — COMMITTED ✓
+2026/03/31 18:42:38.953960 [COMMIT] Leader node3: Entry Index=2 replicated on 2/3 nodes — COMMITTED ✓
+2026/03/31 18:42:38.953994 [REPLICATION] Leader node3 → localhost:5002: Replicated 1 entries | matchIndex=2 | nextIndex=3
+2026/03/31 18:42:38.953994 [REPLICATION] Leader node3 → localhost:5002: Replicated 1 entries | matchIndex=2 | nextIndex=3
+2026/03/31 18:42:38.954017 [APPLY] Node node3: Applying entry Index=2 Term=2 Action=CREATE_KEY | lastApplied=2 commitIndex=2
+2026/03/31 18:42:38.954017 [APPLY] Node node3: Applying entry Index=2 Term=2 Action=CREATE_KEY | lastApplied=2 commitIndex=2
+2026/03/31 18:42:38.954084 [KMS] Created key: bob
+2026/03/31 18:42:38.954084 [KMS] Created key: bob
+2026/03/31 18:42:38.954109 [TEST/DEMO] Key created via demo endpoint: bob
+2026/03/31 18:42:38.954109 [TEST/DEMO] Key created via demo endpoint: bob
+2026/03/31 18:43:34.857576 [RAFT] Leader node3: Appended entry Index=3 Term=2 Action=AUDIT_LOG
+2026/03/31 18:43:34.857576 [RAFT] Leader node3: Appended entry Index=3 Term=2 Action=AUDIT_LOG
+2026/03/31 18:43:34.861628 [REPLICATION] Leader node3 → localhost:5001: Replicated 1 entries | matchIndex=3 | nextIndex=4
+2026/03/31 18:43:34.861628 [REPLICATION] Leader node3 → localhost:5001: Replicated 1 entries | matchIndex=3 | nextIndex=4
+2026/03/31 18:43:34.861993 [COMMIT] Leader node3: Entry Index=3 replicated on 2/3 nodes — COMMITTED ✓
+2026/03/31 18:43:34.861993 [COMMIT] Leader node3: Entry Index=3 replicated on 2/3 nodes — COMMITTED ✓
+2026/03/31 18:43:34.862046 [REPLICATION] Leader node3 → localhost:5002: Replicated 1 entries | matchIndex=3 | nextIndex=4
+2026/03/31 18:43:34.862046 [REPLICATION] Leader node3 → localhost:5002: Replicated 1 entries | matchIndex=3 | nextIndex=4
+2026/03/31 18:43:34.862082 [APPLY] Node node3: Applying entry Index=3 Term=2 Action=AUDIT_LOG | lastApplied=3 commitIndex=3
+2026/03/31 18:43:34.862082 [APPLY] Node node3: Applying entry Index=3 Term=2 Action=AUDIT_LOG | lastApplied=3 commitIndex=3
+2026/03/31 18:43:34.862138 [KMS/AUDIT] User admin performed DECRYPT on Key alice
+2026/03/31 18:43:34.862138 [KMS/AUDIT] User admin performed DECRYPT on Key alice
+2026/03/31 18:45:10.137762 [CHAOS] 💀 Node KILLED - all requests will be rejected
+2026/03/31 18:45:10.137762 [CHAOS] 💀 Node KILLED - all requests will be rejected
+2026/03/31 18:46:43.487064 [CHAOS] ✅ Node REVIVED - accepting requests again
+2026/03/31 18:46:43.487064 [CHAOS] ✅ Node REVIVED - accepting requests again
+2026/03/31 18:46:43.643107 [RAFT] Node node3: Stepping down, higher term 3 from localhost:5002
+2026/03/31 18:46:43.643107 [RAFT] Node node3: Stepping down, higher term 3 from localhost:5002
+2026/03/31 18:46:43.921354 [SYNC] Node node3 ← node1: Appended 4 entries | LogLen now=4 | commitIndex=3
+2026/03/31 18:46:43.921354 [SYNC] Node node3 ← node1: Appended 4 entries | LogLen now=4 | commitIndex=3
+2026/03/31 18:46:43.921480 [APPLY] Node node3: Applying entry Index=4 Term=3 Action=CREATE_KEY | lastApplied=4 commitIndex=4
+2026/03/31 18:46:43.921480 [APPLY] Node node3: Applying entry Index=4 Term=3 Action=CREATE_KEY | lastApplied=4 commitIndex=4
+2026/03/31 18:46:43.921540 [KMS] Created key: rudra
+2026/03/31 18:46:43.921540 [KMS] Created key: rudra
+2026/03/31 18:47:13.586659 [ELECTION] ⚡ Node node3 timed out waiting for heartbeat — starting election | Term=4 | LogLen=4 | Need=2/3 votes
+2026/03/31 18:47:13.586659 [ELECTION] ⚡ Node node3 timed out waiting for heartbeat — starting election | Term=4 | LogLen=4 | Need=2/3 votes
+2026/03/31 18:47:13.587159 [ELECTION] Node node3: Voted for self (1/2). Requesting votes from peers: [localhost:5001 localhost:5002]
+2026/03/31 18:47:13.587159 [ELECTION] Node node3: Voted for self (1/2). Requesting votes from peers: [localhost:5001 localhost:5002]
+2026/03/31 18:47:13.587270 [ELECTION] Node node3 → localhost:5002: Sending RequestVote | Term=4 LastLogIndex=4 LastLogTerm=3
+2026/03/31 18:47:13.587270 [ELECTION] Node node3 → localhost:5002: Sending RequestVote | Term=4 LastLogIndex=4 LastLogTerm=3
+2026/03/31 18:47:13.587355 [ELECTION] Node node3 → localhost:5001: Sending RequestVote | Term=4 LastLogIndex=4 LastLogTerm=3
+2026/03/31 18:47:13.587355 [ELECTION] Node node3 → localhost:5001: Sending RequestVote | Term=4 LastLogIndex=4 LastLogTerm=3
+2026/03/31 18:47:13.589228 [ELECTION] Node node3 ← localhost:5001: Vote DENIED ✗ | peer's term=0
+2026/03/31 18:47:13.589228 [ELECTION] Node node3 ← localhost:5001: Vote DENIED ✗ | peer's term=0
+2026/03/31 18:47:13.592305 [ELECTION] Node node3 ← localhost:5002: Vote GRANTED ✓ | Votes=2/3 (need 2)
+2026/03/31 18:47:13.592305 [ELECTION] Node node3 ← localhost:5002: Vote GRANTED ✓ | Votes=2/3 (need 2)
+2026/03/31 18:47:13.592435 [ELECTION] Node node3: Won election with majority votes! Becoming LEADER for Term 4
+2026/03/31 18:47:13.592435 [ELECTION] Node node3: Won election with majority votes! Becoming LEADER for Term 4
+2026/03/31 18:47:13.592465 [LEADER] 🎉 Node node3 became LEADER for Term 4 | LogLen=4 | Peers=[localhost:5001 localhost:5002]
+2026/03/31 18:47:13.592465 [LEADER] 🎉 Node node3 became LEADER for Term 4 | LogLen=4 | Peers=[localhost:5001 localhost:5002]
+2026/03/31 18:47:13.593268 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:13.593268 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:13.593420 [REPLICATION] Leader node3 → localhost:5001: Log inconsistency — backing nextIndex to 4 for retry
+2026/03/31 18:47:13.593420 [REPLICATION] Leader node3 → localhost:5001: Log inconsistency — backing nextIndex to 4 for retry
+2026/03/31 18:47:14.094474 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:14.094474 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:14.094669 [REPLICATION] Leader node3 → localhost:5001: Log inconsistency — backing nextIndex to 3 for retry
+2026/03/31 18:47:14.094669 [REPLICATION] Leader node3 → localhost:5001: Log inconsistency — backing nextIndex to 3 for retry
+2026/03/31 18:47:14.594400 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:14.594400 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:14.594544 [REPLICATION] Leader node3 → localhost:5001: Log inconsistency — backing nextIndex to 2 for retry
+2026/03/31 18:47:14.594544 [REPLICATION] Leader node3 → localhost:5001: Log inconsistency — backing nextIndex to 2 for retry
+2026/03/31 18:47:15.093421 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:15.093421 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:15.093582 [REPLICATION] Leader node3 → localhost:5001: Log inconsistency — backing nextIndex to 1 for retry
+2026/03/31 18:47:15.093582 [REPLICATION] Leader node3 → localhost:5001: Log inconsistency — backing nextIndex to 1 for retry
+2026/03/31 18:47:15.594299 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:15.594299 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:16.094310 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:16.094310 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:16.594286 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:16.594286 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:17.093893 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:17.093893 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:17.594366 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:17.594366 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:18.094358 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:18.094358 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:18.594381 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:18.594381 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:19.093975 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:19.093975 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:19.593899 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:19.593899 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:20.094301 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:20.094301 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:20.594159 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:20.594159 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:21.094311 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:21.094311 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:21.594295 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:21.594295 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:22.094165 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:22.094165 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:22.594190 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:22.594190 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:23.093962 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:23.093962 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:23.593952 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:23.593952 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:24.093790 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:24.093790 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:24.594205 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:24.594205 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:25.093182 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:25.093182 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:25.593699 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:25.593699 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:26.093924 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:26.093924 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:26.594108 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:26.594108 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:27.094121 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:27.094121 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:27.594154 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:27.594154 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:28.093927 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:28.093927 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:28.593861 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:28.593861 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:29.094045 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:29.094045 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:29.157890 [RAFT] Leader node3: Appended entry Index=5 Term=4 Action=AUDIT_LOG
+2026/03/31 18:47:29.157890 [RAFT] Leader node3: Appended entry Index=5 Term=4 Action=AUDIT_LOG
+2026/03/31 18:47:29.158897 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:29.158897 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:29.160881 [REPLICATION] Leader node3 → localhost:5002: Replicated 1 entries | matchIndex=5 | nextIndex=6
+2026/03/31 18:47:29.160881 [REPLICATION] Leader node3 → localhost:5002: Replicated 1 entries | matchIndex=5 | nextIndex=6
+2026/03/31 18:47:29.160956 [COMMIT] Leader node3: Entry Index=5 replicated on 2/3 nodes — COMMITTED ✓
+2026/03/31 18:47:29.160956 [COMMIT] Leader node3: Entry Index=5 replicated on 2/3 nodes — COMMITTED ✓
+2026/03/31 18:47:29.161021 [APPLY] Node node3: Applying entry Index=5 Term=4 Action=AUDIT_LOG | lastApplied=5 commitIndex=5
+2026/03/31 18:47:29.161021 [APPLY] Node node3: Applying entry Index=5 Term=4 Action=AUDIT_LOG | lastApplied=5 commitIndex=5
+2026/03/31 18:47:29.161077 [KMS/AUDIT] User admin performed DECRYPT on Key rudra
+2026/03/31 18:47:29.161077 [KMS/AUDIT] User admin performed DECRYPT on Key rudra
+2026/03/31 18:47:29.594091 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:29.594091 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:30.093127 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:30.093127 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:30.593747 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:30.593747 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:31.093558 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:31.093558 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:31.593277 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:31.593277 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:32.093847 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:32.093847 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:32.593714 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:32.593714 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:33.094088 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:33.094088 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:33.593578 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:33.593578 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:34.093890 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:34.093890 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:34.593825 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:34.593825 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:35.094154 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:35.094154 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:35.593813 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:35.593813 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:36.093663 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:36.093663 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:36.593864 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:36.593864 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:37.093802 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:37.093802 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:37.593842 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:37.593842 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:38.093542 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:38.093542 [RPC] AppendEntries to localhost:5001 returned status 503
+2026/03/31 18:47:38.595786 [REPLICATION] Leader node3 → localhost:5001: Replicated 5 entries | matchIndex=5 | nextIndex=6
+2026/03/31 18:47:38.595786 [REPLICATION] Leader node3 → localhost:5001: Replicated 5 entries | matchIndex=5 | nextIndex=6

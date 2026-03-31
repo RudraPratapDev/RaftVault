@@ -144,7 +144,8 @@ func (rn *RaftNode) Start() error {
 	}
 	rn.mu.Unlock()
 
-	log.Printf("[RAFT] Node %s started | Term=%d | Log length=%d", rn.id, rn.currentTerm, len(rn.log))
+	log.Printf("[RAFT] Node %s started | Term=%d | VotedFor=%q | LogLen=%d | Recovering committed entries...",
+		rn.id, rn.currentTerm, rn.votedFor, len(rn.log))
 
 	// Re-apply committed entries to rebuild state machine
 	rn.mu.Lock()
@@ -331,9 +332,18 @@ func (rn *RaftNode) startElection() {
 	if lastLogIndex > 0 {
 		lastLogTerm = rn.log[lastLogIndex-1].Term
 	}
+	totalNodes := len(rn.peers) + 1
+	majority := totalNodes/2 + 1
 
-	log.Printf("[ELECTION] Node %s starting election for Term %d", rn.id, term)
-	rn.emitEvent(EventElectionStart, term, map[string]interface{}{"message": "Starting election"})
+	log.Printf("[ELECTION] ⚡ Node %s timed out waiting for heartbeat — starting election | Term=%d | LogLen=%d | Need=%d/%d votes",
+		rn.id, term, lastLogIndex, majority, totalNodes)
+	rn.emitEvent(EventElectionStart, term, map[string]interface{}{
+		"message":       "Election timeout — starting election",
+		"need_votes":    majority,
+		"total_nodes":   totalNodes,
+		"last_log_index": lastLogIndex,
+		"last_log_term": lastLogTerm,
+	})
 
 	rn.mu.Unlock()
 
@@ -345,22 +355,28 @@ func (rn *RaftNode) startElection() {
 	}
 
 	votesReceived := 1 // vote for self
-	totalNodes := len(rn.peers) + 1
-	majority := totalNodes/2 + 1
+	log.Printf("[ELECTION] Node %s: Voted for self (1/%d). Requesting votes from peers: %v", rn.id, majority, rn.peers)
 
 	var votesMu sync.Mutex
 	voteDone := make(chan struct{})
 
 	for _, peer := range rn.peers {
 		go func(p string) {
+			log.Printf("[ELECTION] Node %s → %s: Sending RequestVote | Term=%d LastLogIndex=%d LastLogTerm=%d",
+				rn.id, p, term, lastLogIndex, lastLogTerm)
 			reply, err := sendRequestVote(p, args)
 			if err != nil {
-				log.Printf("[ELECTION] Node %s: Failed to get vote from %s: %v", rn.id, p, err)
+				log.Printf("[ELECTION] Node %s → %s: RequestVote FAILED (peer unreachable): %v", rn.id, p, err)
+				rn.emitEvent(EventVoteRejected, term, map[string]interface{}{
+					"from": p, "reason": "unreachable",
+				})
 				return
 			}
 
 			rn.mu.Lock()
 			if reply.Term > rn.currentTerm {
+				log.Printf("[ELECTION] Node %s: Saw higher term %d from %s — stepping down to FOLLOWER",
+					rn.id, reply.Term, p)
 				rn.currentTerm = reply.Term
 				rn.role = Follower
 				rn.votedFor = ""
@@ -372,10 +388,16 @@ func (rn *RaftNode) startElection() {
 			rn.mu.Unlock()
 
 			if reply.VoteGranted {
-				log.Printf("[ELECTION] Node %s: Received vote from %s for Term %d", rn.id, p, term)
-				rn.emitEvent(EventVoteGranted, term, map[string]interface{}{"from": p})
 				votesMu.Lock()
 				votesReceived++
+				current := votesReceived
+				votesMu.Unlock()
+				log.Printf("[ELECTION] Node %s ← %s: Vote GRANTED ✓ | Votes=%d/%d (need %d)",
+					rn.id, p, current, totalNodes, majority)
+				rn.emitEvent(EventVoteGranted, term, map[string]interface{}{
+					"from": p, "votes_so_far": current, "need": majority,
+				})
+				votesMu.Lock()
 				if votesReceived >= majority {
 					select {
 					case voteDone <- struct{}{}:
@@ -384,7 +406,10 @@ func (rn *RaftNode) startElection() {
 				}
 				votesMu.Unlock()
 			} else {
-				rn.emitEvent(EventVoteRejected, term, map[string]interface{}{"from": p})
+				log.Printf("[ELECTION] Node %s ← %s: Vote DENIED ✗ | peer's term=%d", rn.id, p, reply.Term)
+				rn.emitEvent(EventVoteRejected, term, map[string]interface{}{
+					"from": p, "peer_term": reply.Term,
+				})
 			}
 		}(peer)
 	}
@@ -394,14 +419,18 @@ func (rn *RaftNode) startElection() {
 	case <-voteDone:
 		rn.mu.Lock()
 		if rn.currentTerm == term && rn.role == Candidate {
+			log.Printf("[ELECTION] Node %s: Won election with majority votes! Becoming LEADER for Term %d", rn.id, term)
 			rn.becomeLeader()
 		}
 		rn.mu.Unlock()
 	case <-time.After(rn.randomElectionTimeout()):
 		rn.mu.Lock()
 		if rn.role == Candidate {
-			log.Printf("[ELECTION] Node %s: Election timed out for Term %d", rn.id, term)
+			log.Printf("[ELECTION] Node %s: Election TIMED OUT for Term %d (split vote or no quorum) — reverting to FOLLOWER", rn.id, term)
 			rn.role = Follower
+			rn.emitEvent(EventRoleChange, term, map[string]interface{}{
+				"from": "CANDIDATE", "to": "FOLLOWER", "reason": "election timeout / split vote",
+			})
 		}
 		rn.mu.Unlock()
 	case <-rn.stopCh:
@@ -420,9 +449,16 @@ func (rn *RaftNode) becomeLeader() {
 		rn.matchIndex[peer] = 0
 	}
 
-	log.Printf("[LEADER] 🎉 Node %s became LEADER for Term %d", rn.id, rn.currentTerm)
-	rn.emitEvent(EventLeaderElected, rn.currentTerm, map[string]interface{}{"message": "Became leader"})
-	rn.emitEvent(EventRoleChange, rn.currentTerm, map[string]interface{}{"from": "CANDIDATE", "to": "LEADER"})
+	log.Printf("[LEADER] 🎉 Node %s became LEADER for Term %d | LogLen=%d | Peers=%v",
+		rn.id, rn.currentTerm, len(rn.log), rn.peers)
+	rn.emitEvent(EventLeaderElected, rn.currentTerm, map[string]interface{}{
+		"message":    "Became leader",
+		"log_length": len(rn.log),
+		"peers":      rn.peers,
+	})
+	rn.emitEvent(EventRoleChange, rn.currentTerm, map[string]interface{}{
+		"from": "CANDIDATE", "to": "LEADER",
+	})
 
 	// Start heartbeat goroutine
 	go rn.heartbeatLoop()
@@ -533,10 +569,12 @@ func (rn *RaftNode) replicateTo(peer string) {
 		if len(entries) > 0 {
 			rn.nextIndex[peer] = entries[len(entries)-1].Index + 1
 			rn.matchIndex[peer] = entries[len(entries)-1].Index
-			log.Printf("[REPLICATION] Leader %s: Replicated to %s up to Index %d",
-				rn.id, peer, rn.matchIndex[peer])
+			log.Printf("[REPLICATION] Leader %s → %s: Replicated %d entries | matchIndex=%d | nextIndex=%d",
+				rn.id, peer, len(entries), rn.matchIndex[peer], rn.nextIndex[peer])
 			rn.emitEvent(EventLogReplicated, rn.currentTerm, map[string]interface{}{
-				"peer": peer, "match_index": rn.matchIndex[peer],
+				"peer":        peer,
+				"match_index": rn.matchIndex[peer],
+				"entries":     len(entries),
 			})
 		}
 		rn.advanceCommitIndex()
@@ -544,6 +582,8 @@ func (rn *RaftNode) replicateTo(peer string) {
 		// Decrement nextIndex and retry
 		if rn.nextIndex[peer] > 1 {
 			rn.nextIndex[peer]--
+			log.Printf("[REPLICATION] Leader %s → %s: Log inconsistency — backing nextIndex to %d for retry",
+				rn.id, peer, rn.nextIndex[peer])
 		}
 	}
 }
@@ -565,8 +605,13 @@ func (rn *RaftNode) advanceCommitIndex() {
 
 		majority := (len(rn.peers) + 1) / 2 + 1
 		if replicatedCount >= majority {
-			log.Printf("[COMMIT] Leader %s: Committed entries up to Index %d", rn.id, n)
-			rn.emitEvent(EventEntryCommitted, rn.currentTerm, map[string]interface{}{"commit_index": n})
+			log.Printf("[COMMIT] Leader %s: Entry Index=%d replicated on %d/%d nodes — COMMITTED ✓",
+				rn.id, n, replicatedCount, len(rn.peers)+1)
+			rn.emitEvent(EventEntryCommitted, rn.currentTerm, map[string]interface{}{
+				"commit_index":      n,
+				"replicated_on":     replicatedCount,
+				"total_nodes":       len(rn.peers) + 1,
+			})
 			rn.commitIndex = n
 			// Signal the apply loop
 			select {
@@ -602,8 +647,8 @@ func (rn *RaftNode) applyCommitted() {
 		rn.emitEvent(EventEntryApplied, entry.Term, map[string]interface{}{
 			"index": entry.Index, "action": entry.Command.Action,
 		})
-		log.Printf("[APPLY] Node %s: Applying entry Index=%d Term=%d Action=%s",
-			rn.id, entry.Index, entry.Term, entry.Command.Action)
+		log.Printf("[APPLY] Node %s: Applying entry Index=%d Term=%d Action=%s | lastApplied=%d commitIndex=%d",
+			rn.id, entry.Index, entry.Term, entry.Command.Action, rn.lastApplied, rn.commitIndex)
 
 		var result applyResult
 		
@@ -696,11 +741,21 @@ func (rn *RaftNode) HandleRequestVote(args RequestVoteArgs) RequestVoteReply {
 			rn.lastHeartbeat = time.Now()
 			rn.persist()
 			reply.VoteGranted = true
-			log.Printf("[VOTE] Node %s: Voted for %s in Term %d", rn.id, args.CandidateID, args.Term)
+			log.Printf("[VOTE] Node %s: Granted vote to %s for Term %d | candidate log up-to-date ✓",
+				rn.id, args.CandidateID, args.Term)
 			rn.emitEvent(EventRequestVote, args.Term, map[string]interface{}{
 				"candidate": args.CandidateID, "granted": true,
 			})
+		} else {
+			log.Printf("[VOTE] Node %s: Denied vote to %s for Term %d | candidate log is stale (lastLogTerm=%d lastLogIndex=%d, mine=%d/%d)",
+				rn.id, args.CandidateID, args.Term, args.LastLogTerm, args.LastLogIndex, lastLogTerm, lastLogIndex)
+			rn.emitEvent(EventRequestVote, args.Term, map[string]interface{}{
+				"candidate": args.CandidateID, "granted": false, "reason": "stale log",
+			})
 		}
+	} else {
+		log.Printf("[VOTE] Node %s: Denied vote to %s for Term %d | already voted for %s",
+			rn.id, args.CandidateID, args.Term, rn.votedFor)
 	}
 
 	return reply
@@ -762,6 +817,8 @@ func (rn *RaftNode) HandleAppendEntries(args AppendEntriesArgs) AppendEntriesRep
 			if idx < len(rn.log) {
 				if rn.log[idx].Term != entry.Term {
 					// Conflict: delete this and all following
+					log.Printf("[SYNC] Node %s: Log conflict at index %d (mine term=%d, leader term=%d) — truncating and rewriting",
+						rn.id, idx+1, rn.log[idx].Term, entry.Term)
 					rn.log = rn.log[:idx]
 					rn.log = append(rn.log, args.Entries[i:]...)
 					break
@@ -772,10 +829,12 @@ func (rn *RaftNode) HandleAppendEntries(args AppendEntriesArgs) AppendEntriesRep
 			}
 		}
 		rn.persist()
-		log.Printf("[REPLICATION] Node %s: Received %d entries from leader %s, log length now %d",
-			rn.id, len(args.Entries), args.LeaderID, len(rn.log))
+		log.Printf("[SYNC] Node %s ← %s: Appended %d entries | LogLen now=%d | commitIndex=%d",
+			rn.id, args.LeaderID, len(args.Entries), len(rn.log), rn.commitIndex)
 		rn.emitEvent(EventAppendEntries, args.Term, map[string]interface{}{
-			"entries_count": len(args.Entries), "log_length": len(rn.log), "from": args.LeaderID,
+			"entries_count": len(args.Entries),
+			"log_length":    len(rn.log),
+			"from":          args.LeaderID,
 		})
 	}
 

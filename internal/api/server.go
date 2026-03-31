@@ -115,6 +115,13 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/chaos/partition", s.cors(s.handleChaosPartition))
 	mux.HandleFunc("/chaos/heal", s.cors(s.handleChaosHeal))
 
+	// Test/Demo endpoint — no auth required, localhost only
+	mux.HandleFunc("/test/demo", s.cors(s.handleTestDemoPage))
+	mux.HandleFunc("/test/demo/api", s.cors(s.handleTestDemo))
+	mux.HandleFunc("/test/demo/createKey", s.cors(s.handleTestDemoCreateKey))
+	mux.HandleFunc("/test/demo/encrypt", s.cors(s.handleTestDemoEncrypt))
+	mux.HandleFunc("/test/demo/status", s.cors(s.handleTestDemoStatus))
+
 	log.Printf("[API] HTTP server starting on %s", s.address)
 	return http.ListenAndServe(s.address, mux)
 }
@@ -948,3 +955,437 @@ func (s *Server) handleChaosHeal(w http.ResponseWriter, r *http.Request) {
 	s.events.Add(raft.EventRoleChange, s.raftNode.GetID(), 0, map[string]interface{}{"message": "Healed partition with " + req.Target})
 	writeJSON(w, http.StatusOK, map[string]string{"message": "healed partition with " + req.Target})
 }
+
+// --- Test/Demo Handlers (localhost only, no auth required) ---
+
+// isLocalhost checks if the request comes from localhost
+func isLocalhost(r *http.Request) bool {
+	host := r.RemoteAddr
+	return strings.HasPrefix(host, "127.0.0.1:") ||
+		strings.HasPrefix(host, "[::1]:") ||
+		strings.HasPrefix(host, "localhost:")
+}
+
+// handleTestDemoPage serves the interactive demo HTML page
+func (s *Server) handleTestDemoPage(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !isLocalhost(r) {
+		http.Error(w, "test/demo is localhost-only", http.StatusForbidden)
+		return
+	}
+	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	fmt.Fprint(w, testDemoHTML)
+}
+
+// handleTestDemo serves the demo page info and cluster state (no auth)
+func (s *Server) handleTestDemo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !isLocalhost(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "test/demo endpoints are localhost-only"})
+		return
+	}
+
+	state := s.raftNode.GetState()
+	keys := s.kmsStore.GetAllKeys()
+	users := s.kmsStore.GetAllUsers()
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"node_id":      state["node_id"],
+		"role":         state["role"],
+		"current_term": state["current_term"],
+		"leader_id":    state["leader_id"],
+		"log_length":   state["log_length"],
+		"commit_index": state["commit_index"],
+		"keys":         keys,
+		"users":        users,
+		"admin_key":    "admin-secret-key",
+		"hint":         "POST /test/demo/createKey with {\"key_id\":\"my-key\"} to create a key without auth",
+	})
+}
+
+// handleTestDemoCreateKey creates a key without requiring auth (localhost only)
+func (s *Server) handleTestDemoCreateKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !isLocalhost(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "test/demo endpoints are localhost-only"})
+		return
+	}
+
+	if !s.raftNode.IsLeader() {
+		leaderAddr := s.raftNode.GetLeaderAddress()
+		writeJSON(w, http.StatusServiceUnavailable, map[string]interface{}{
+			"error":  "not leader — send to leader",
+			"leader": leaderAddr,
+		})
+		return
+	}
+
+	var req struct {
+		KeyID string `json:"key_id"`
+	}
+	if err := readJSON(r, &req); err != nil || req.KeyID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "key_id is required"})
+		return
+	}
+
+	keyMaterial, err := kms.GenerateKeyMaterial()
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	payload, _ := json.Marshal(kms.CreateKeyPayload{
+		KeyID:       req.KeyID,
+		KeyMaterial: keyMaterial,
+		CreatedAt:   kms.Now(),
+	})
+
+	result, err := s.raftNode.SubmitCommand(storage.Command{
+		Action:  "CREATE_KEY",
+		Payload: payload,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	s.events.Add(raft.EventKeyCreated, s.raftNode.GetID(), 0, map[string]interface{}{
+		"key_id": req.KeyID, "source": "test/demo",
+	})
+	log.Printf("[TEST/DEMO] Key created via demo endpoint: %s", req.KeyID)
+
+	writeJSON(w, http.StatusCreated, map[string]interface{}{
+		"message": "key created via demo endpoint",
+		"key":     result,
+	})
+}
+
+// handleTestDemoEncrypt encrypts plaintext without auth (localhost only)
+func (s *Server) handleTestDemoEncrypt(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !isLocalhost(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "test/demo endpoints are localhost-only"})
+		return
+	}
+
+	var req struct {
+		KeyID     string `json:"key_id"`
+		Plaintext string `json:"plaintext"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	ciphertext, err := s.kmsStore.Encrypt(req.KeyID, req.Plaintext)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"ciphertext": ciphertext,
+		"key_id":     req.KeyID,
+		"note":       "demo encryption — not audited through Raft",
+	})
+}
+
+// handleTestDemoStatus returns full cluster status without auth (localhost only)
+func (s *Server) handleTestDemoStatus(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	if !isLocalhost(r) {
+		writeJSON(w, http.StatusForbidden, map[string]string{"error": "test/demo endpoints are localhost-only"})
+		return
+	}
+
+	state := s.raftNode.GetState()
+	state["chaos"] = s.chaos.GetStatus()
+	state["address"] = s.address
+	state["events_count"] = len(s.events.GetAll())
+
+	writeJSON(w, http.StatusOK, state)
+}
+
+// testDemoHTML is the embedded HTML for the /test/demo page
+const testDemoHTML = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>RaftKMS — Test Demo</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Courier New', monospace; background: #0a0e1a; color: #e0e6f0; min-height: 100vh; padding: 24px; }
+    h1 { color: #00d4ff; font-size: 22px; margin-bottom: 4px; }
+    .subtitle { color: #6b7a99; font-size: 12px; margin-bottom: 28px; }
+    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1100px; }
+    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+    .card { background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.08); border-radius: 10px; padding: 18px; }
+    .card h2 { font-size: 13px; color: #00d4ff; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 1px; }
+    label { display: block; font-size: 11px; color: #6b7a99; margin-bottom: 4px; margin-top: 10px; }
+    input, select, textarea { width: 100%; background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #e0e6f0; padding: 7px 10px; font-size: 12px; font-family: inherit; outline: none; }
+    input:focus, select:focus, textarea:focus { border-color: #00d4ff; }
+    textarea { min-height: 60px; resize: vertical; }
+    button { margin-top: 12px; padding: 8px 16px; border: none; border-radius: 6px; font-size: 12px; font-family: inherit; cursor: pointer; font-weight: 600; transition: opacity 0.15s; }
+    button:hover { opacity: 0.85; }
+    .btn-blue { background: #0066cc; color: #fff; }
+    .btn-green { background: #00aa55; color: #fff; }
+    .btn-red { background: #cc2244; color: #fff; }
+    .btn-orange { background: #cc6600; color: #fff; }
+    .result { margin-top: 10px; padding: 10px; background: rgba(0,0,0,0.5); border-radius: 6px; font-size: 11px; word-break: break-all; white-space: pre-wrap; max-height: 160px; overflow-y: auto; border: 1px solid rgba(255,255,255,0.06); }
+    .result.ok { border-color: rgba(0,200,100,0.3); color: #00cc66; }
+    .result.err { border-color: rgba(200,50,50,0.3); color: #ff4466; }
+    .node-row { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.05); font-size: 12px; }
+    .node-row:last-child { border-bottom: none; }
+    .badge { padding: 2px 8px; border-radius: 4px; font-size: 10px; font-weight: 700; text-transform: uppercase; }
+    .badge.leader { background: #00aa55; color: #fff; }
+    .badge.follower { background: #0055aa; color: #fff; }
+    .badge.candidate { background: #aa7700; color: #fff; }
+    .badge.offline { background: #550022; color: #ff6688; }
+    .log-area { background: rgba(0,0,0,0.6); border: 1px solid rgba(255,255,255,0.06); border-radius: 6px; padding: 10px; font-size: 11px; max-height: 200px; overflow-y: auto; color: #8899bb; }
+    .log-line { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .log-line.election { color: #ffcc00; }
+    .log-line.leader { color: #00cc66; }
+    .log-line.vote { color: #00aaff; }
+    .log-line.chaos { color: #ff4466; }
+    .log-line.kms { color: #cc88ff; }
+    .log-line.replication { color: #44aaff; }
+    .log-line.commit { color: #00ffaa; }
+    .stat { color: #6b7a99; font-size: 10px; }
+    .stat span { color: #e0e6f0; }
+    .key-item { padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 11px; display: flex; justify-content: space-between; }
+    .key-item:last-child { border-bottom: none; }
+    .empty { color: #444; font-size: 11px; padding: 8px 0; }
+    .chaos-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
+    .node-select { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #e0e6f0; padding: 5px 8px; font-size: 11px; font-family: inherit; }
+    #refreshBtn { background: rgba(255,255,255,0.07); color: #aab; border: 1px solid rgba(255,255,255,0.1); }
+    .section-title { font-size: 10px; color: #6b7a99; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
+  </style>
+</head>
+<body>
+  <h1>⚡ RaftKMS — Test Demo</h1>
+  <p class="subtitle">Localhost-only testing panel · No authentication required · For demo and development use</p>
+  <div class="grid">
+    <div class="card">
+      <h2>🖧 Cluster Status</h2>
+      <div id="nodesContainer"><div class="empty">Loading...</div></div>
+      <button id="refreshBtn" onclick="refreshAll()" style="margin-top:12px">↻ Refresh</button>
+    </div>
+    <div class="card">
+      <h2>🔑 Create Key (No Auth)</h2>
+      <label>Key ID</label>
+      <input id="keyId" placeholder="e.g. user-alice-key" />
+      <button class="btn-green" onclick="createKey()">Create Key via Raft</button>
+      <div id="createKeyResult" class="result" style="display:none"></div>
+      <div style="margin-top:20px">
+        <div class="section-title">Active Keys</div>
+        <div id="keysList"><div class="empty">No keys yet.</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>🔒 Encrypt / Decrypt</h2>
+      <label>Key ID</label>
+      <input id="encKeyId" placeholder="Key ID to use" />
+      <label>Plaintext</label>
+      <textarea id="encPlaintext" placeholder="Text to encrypt..."></textarea>
+      <button class="btn-blue" onclick="doEncrypt()">Encrypt</button>
+      <div id="encResult" class="result" style="display:none"></div>
+      <div style="margin-top:16px">
+        <label>Ciphertext to Decrypt</label>
+        <textarea id="decCiphertext" placeholder="Paste ciphertext here..."></textarea>
+        <label>Key ID</label>
+        <input id="decKeyId" placeholder="Key ID used for encryption" />
+        <button class="btn-orange" onclick="doDecrypt()">Decrypt</button>
+        <div id="decResult" class="result" style="display:none"></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>💥 Chaos / Failover Simulation</h2>
+      <label>Target Node</label>
+      <select id="chaosNode" class="node-select" style="width:100%">
+        <option value="localhost:5001">node1 (localhost:5001)</option>
+        <option value="localhost:5002">node2 (localhost:5002)</option>
+        <option value="localhost:5003">node3 (localhost:5003)</option>
+      </select>
+      <div class="chaos-row">
+        <button class="btn-red" onclick="chaosKill()">💀 Kill Node</button>
+        <button class="btn-green" onclick="chaosRevive()">✅ Revive Node</button>
+      </div>
+      <div id="chaosResult" class="result" style="display:none"></div>
+      <div style="margin-top:16px">
+        <label>Delay (ms) — simulates slow network</label>
+        <input id="delayMs" type="number" placeholder="e.g. 300" />
+        <button class="btn-orange" onclick="setDelay()">Set Delay</button>
+      </div>
+    </div>
+    <div class="card" style="grid-column: span 2">
+      <h2>📋 Live Event Stream</h2>
+      <div class="log-area" id="eventLog"><div class="log-line">Connecting to event streams...</div></div>
+    </div>
+  </div>
+  <script>
+    const NODES = ['localhost:5001', 'localhost:5002', 'localhost:5003']
+    let leaderAddr = NODES[0]
+    let eventSources = []
+    function getCategory(type) {
+      if (['ELECTION_START','LEADER_ELECTED'].includes(type)) return 'election'
+      if (['VOTE_GRANTED','VOTE_REJECTED','REQUEST_VOTE'].includes(type)) return 'vote'
+      if (['LOG_REPLICATED','APPEND_ENTRIES','HEARTBEAT'].includes(type)) return 'replication'
+      if (['ENTRY_COMMITTED','ENTRY_APPLIED'].includes(type)) return 'commit'
+      if (['CHAOS_KILL','CHAOS_REVIVE','CHAOS_DELAY','CHAOS_DROP','ROLE_CHANGE'].includes(type)) return 'chaos'
+      if (type.includes('KMS')||['KEY_CREATED','KEY_DELETED','KEY_ROTATED','ENCRYPT','DECRYPT'].includes(type)) return 'kms'
+      return 'replication'
+    }
+    function ts() { return new Date().toLocaleTimeString('en-US',{hour12:false,hour:'2-digit',minute:'2-digit',second:'2-digit',fractionalSecondDigits:1}) }
+    function appendLog(text, category) {
+      const el = document.getElementById('eventLog')
+      const line = document.createElement('div')
+      line.className = 'log-line ' + (category||'')
+      line.textContent = '[' + ts() + '] ' + text
+      el.appendChild(line)
+      while (el.children.length > 200) el.removeChild(el.firstChild)
+      el.scrollTop = el.scrollHeight
+    }
+    function connectSSE() {
+      eventSources.forEach(es => es.close()); eventSources = []
+      NODES.forEach(addr => {
+        try {
+          const es = new EventSource('http://' + addr + '/events')
+          es.onmessage = (e) => {
+            try {
+              const ev = JSON.parse(e.data)
+              if (ev.type === 'CONNECTED') { appendLog('Connected to ' + addr, 'replication'); return }
+              const details = ev.details ? JSON.stringify(ev.details) : ''
+              appendLog('[' + ev.node_id + '] ' + ev.type + ' T' + ev.term + ' ' + details, getCategory(ev.type))
+            } catch {}
+          }
+          es.onerror = () => appendLog('SSE error on ' + addr, 'chaos')
+          eventSources.push(es)
+        } catch {}
+      })
+    }
+    async function apiFetch(addr, path, method, body) {
+      const opts = { method: method||'GET', headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer admin-secret-key' } }
+      if (body) opts.body = JSON.stringify(body)
+      const res = await fetch('http://' + addr + path, opts)
+      const json = await res.json()
+      if (!res.ok) throw new Error(json.error || JSON.stringify(json))
+      return json
+    }
+    async function refreshAll() {
+      let found = false
+      for (const addr of NODES) {
+        try {
+          const data = await apiFetch(addr, '/cluster/status')
+          if (data.nodes) {
+            renderNodes(data.nodes)
+            const leader = data.nodes.find(n => n.role === 'LEADER' && n.is_alive && !n.is_chaos_killed)
+            if (leader) leaderAddr = leader.address
+            found = true; break
+          }
+        } catch {}
+      }
+      if (!found) document.getElementById('nodesContainer').innerHTML = '<div class="empty" style="color:#ff4466">Cannot reach any node. Is the cluster running?</div>'
+      for (const addr of NODES) {
+        try { const data = await apiFetch(addr, '/kms/listKeys'); renderKeys(data.keys||[]); break } catch {}
+      }
+    }
+    function renderNodes(nodes) {
+      const c = document.getElementById('nodesContainer'); c.innerHTML = ''
+      nodes.forEach(n => {
+        const alive = n.is_alive && !n.is_chaos_killed
+        const role = alive ? n.role.toLowerCase() : 'offline'
+        const row = document.createElement('div'); row.className = 'node-row'
+        row.innerHTML = '<span class="badge ' + role + '">' + role.toUpperCase() + '</span><span style="flex:1;font-weight:600">' + n.node_id + '</span><span class="stat">T<span>' + n.current_term + '</span></span><span class="stat">Log:<span>' + n.log_length + '</span></span><span class="stat">CI:<span>' + n.commit_index + '</span></span>'
+        c.appendChild(row)
+      })
+    }
+    function renderKeys(keys) {
+      const el = document.getElementById('keysList')
+      if (!keys.length) { el.innerHTML = '<div class="empty">No keys yet.</div>'; return }
+      el.innerHTML = keys.map(k => '<div class="key-item"><span style="color:#cc88ff">' + k.key_id + '</span><span class="stat">v<span>' + (k.versions&&k.versions.length||1) + '</span></span></div>').join('')
+    }
+    function showResult(id, data, ok) {
+      const el = document.getElementById(id); el.style.display = 'block'
+      el.className = 'result ' + (ok?'ok':'err')
+      el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+    }
+    async function createKey() {
+      const keyId = document.getElementById('keyId').value.trim()
+      if (!keyId) { showResult('createKeyResult','key_id is required',false); return }
+      try {
+        const data = await apiFetch(leaderAddr, '/test/demo/createKey', 'POST', { key_id: keyId })
+        showResult('createKeyResult', data, true)
+        document.getElementById('keyId').value = ''
+        appendLog('Key created: ' + keyId, 'kms')
+        setTimeout(refreshAll, 500)
+      } catch (e) { showResult('createKeyResult', e.message, false) }
+    }
+    async function doEncrypt() {
+      const keyId = document.getElementById('encKeyId').value.trim()
+      const plaintext = document.getElementById('encPlaintext').value
+      if (!keyId||!plaintext) { showResult('encResult','key_id and plaintext required',false); return }
+      try {
+        const data = await apiFetch(leaderAddr, '/test/demo/encrypt', 'POST', { key_id: keyId, plaintext })
+        showResult('encResult', data.ciphertext, true)
+        document.getElementById('decCiphertext').value = data.ciphertext
+        document.getElementById('decKeyId').value = keyId
+        appendLog('Encrypted with key: ' + keyId, 'kms')
+      } catch (e) { showResult('encResult', e.message, false) }
+    }
+    async function doDecrypt() {
+      const keyId = document.getElementById('decKeyId').value.trim()
+      const ciphertext = document.getElementById('decCiphertext').value.trim()
+      if (!keyId||!ciphertext) { showResult('decResult','key_id and ciphertext required',false); return }
+      try {
+        const data = await apiFetch(leaderAddr, '/kms/decrypt', 'POST', { key_id: keyId, ciphertext })
+        showResult('decResult', data.plaintext, true)
+        appendLog('Decrypted with key: ' + keyId, 'kms')
+      } catch (e) { showResult('decResult', e.message, false) }
+    }
+    async function chaosKill() {
+      const addr = document.getElementById('chaosNode').value
+      try {
+        const data = await fetch('http://' + addr + '/chaos/kill', {method:'POST'}).then(r=>r.json())
+        showResult('chaosResult', data, true)
+        appendLog('KILLED node at ' + addr, 'chaos')
+        setTimeout(refreshAll, 1500)
+      } catch (e) { showResult('chaosResult', e.message, false) }
+    }
+    async function chaosRevive() {
+      const addr = document.getElementById('chaosNode').value
+      try {
+        const data = await fetch('http://' + addr + '/chaos/revive', {method:'POST'}).then(r=>r.json())
+        showResult('chaosResult', data, true)
+        appendLog('REVIVED node at ' + addr, 'chaos')
+        setTimeout(refreshAll, 1500)
+      } catch (e) { showResult('chaosResult', e.message, false) }
+    }
+    async function setDelay() {
+      const addr = document.getElementById('chaosNode').value
+      const ms = parseInt(document.getElementById('delayMs').value)||0
+      try {
+        const data = await fetch('http://' + addr + '/chaos/delay', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({delay_ms:ms})}).then(r=>r.json())
+        showResult('chaosResult', data, true)
+        appendLog('Set delay ' + ms + 'ms on ' + addr, 'chaos')
+      } catch (e) { showResult('chaosResult', e.message, false) }
+    }
+    connectSSE(); refreshAll(); setInterval(refreshAll, 3000)
+  </script>
+</body>
+</html>`
