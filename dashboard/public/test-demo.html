@@ -3,410 +3,660 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>RaftKMS — Test Demo</title>
+  <title>RaftKMS — Enterprise Demo</title>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
+    :root {
+      --bg-dark: #05070f;
+      --glass-bg: rgba(20, 25, 40, 0.4);
+      --glass-border: rgba(255, 255, 255, 0.08);
+      --neon-blue: #00f0ff;
+      --neon-purple: #b026ff;
+      --neon-green: #00ff88;
+      --neon-red: #ff2a55;
+      --neon-orange: #ff9900;
+      --text-main: #e2e8f0;
+      --text-muted: #8b9bb4;
+      --accent-gradient: linear-gradient(135deg, var(--neon-blue), var(--neon-purple));
+    }
+    
     * { box-sizing: border-box; margin: 0; padding: 0; }
+    
     body {
-      font-family: 'Courier New', monospace;
-      background: #0a0e1a;
-      color: #e0e6f0;
+      font-family: 'Outfit', sans-serif;
+      background: radial-gradient(circle at 50% 0%, #131a2f 0%, var(--bg-dark) 80%);
+      color: var(--text-main);
       min-height: 100vh;
-      padding: 24px;
+      padding: 40px 24px;
+      line-height: 1.5;
     }
-    h1 { color: #00d4ff; font-size: 22px; margin-bottom: 4px; }
-    .subtitle { color: #6b7a99; font-size: 12px; margin-bottom: 28px; }
-    .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; max-width: 1100px; }
-    @media (max-width: 700px) { .grid { grid-template-columns: 1fr; } }
+
+    /* Glow elements */
+    .bg-glow {
+      position: fixed;
+      top: -10vw;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 50vw;
+      height: 20vw;
+      background: var(--neon-blue);
+      filter: blur(150px);
+      opacity: 0.15;
+      z-index: -1;
+      pointer-events: none;
+    }
+
+    header {
+      text-align: center;
+      margin-bottom: 40px;
+      animation: fadeInDown 0.8s ease-out;
+    }
+
+    h1 {
+      font-size: 36px;
+      font-weight: 700;
+      background: var(--accent-gradient);
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 8px;
+      letter-spacing: -0.5px;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      font-weight: 300;
+      letter-spacing: 0.5px;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+      gap: 24px;
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+
+    .grid-wide {
+      grid-column: 1 / -1;
+    }
+
     .card {
-      background: rgba(255,255,255,0.04);
-      border: 1px solid rgba(255,255,255,0.08);
-      border-radius: 10px;
-      padding: 18px;
+      background: var(--glass-bg);
+      border: 1px solid var(--glass-border);
+      border-radius: 16px;
+      padding: 24px;
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+      animation: fadeInUp 0.8s ease-out both;
+      display: flex;
+      flex-direction: column;
     }
-    .card h2 { font-size: 13px; color: #00d4ff; margin-bottom: 14px; text-transform: uppercase; letter-spacing: 1px; }
-    label { display: block; font-size: 11px; color: #6b7a99; margin-bottom: 4px; margin-top: 10px; }
+
+    .card:hover {
+      transform: translateY(-4px);
+      box-shadow: 0 12px 40px rgba(0, 240, 255, 0.08);
+      border-color: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Animation delays for staggered load */
+    .card:nth-child(1) { animation-delay: 0.1s; }
+    .card:nth-child(2) { animation-delay: 0.2s; }
+    .card:nth-child(3) { animation-delay: 0.3s; }
+    .card:nth-child(4) { animation-delay: 0.4s; }
+    .card:nth-child(5) { animation-delay: 0.5s; }
+
+    .card h2 {
+      font-size: 16px;
+      font-weight: 600;
+      color: #fff;
+      margin-bottom: 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      text-transform: uppercase;
+      letter-spacing: 1.5px;
+    }
+
+    .card h2::before {
+      content: '';
+      display: block;
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--neon-blue);
+      box-shadow: 0 0 10px var(--neon-blue);
+    }
+    
+    .card h2.sect-chaos::before { background: var(--neon-red); box-shadow: 0 0 10px var(--neon-red); }
+    .card h2.sect-kms::before { background: var(--neon-purple); box-shadow: 0 0 10px var(--neon-purple); }
+    .card h2.sect-crypto::before { background: var(--neon-green); box-shadow: 0 0 10px var(--neon-green); }
+
+    label {
+      display: block;
+      font-size: 11px;
+      color: var(--text-muted);
+      margin: 16px 0 8px 0;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 600;
+    }
+
     input, select, textarea {
       width: 100%;
-      background: rgba(0,0,0,0.4);
-      border: 1px solid rgba(255,255,255,0.1);
-      border-radius: 6px;
-      color: #e0e6f0;
-      padding: 7px 10px;
-      font-size: 12px;
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.1);
+      border-radius: 8px;
+      color: #fff;
+      padding: 12px 14px;
+      font-size: 14px;
       font-family: inherit;
       outline: none;
+      transition: all 0.2s ease;
     }
-    input:focus, select:focus, textarea:focus { border-color: #00d4ff; }
-    textarea { min-height: 60px; resize: vertical; }
+
+    textarea {
+      min-height: 100px;
+      resize: vertical;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 13px;
+    }
+
+    input:focus, select:focus, textarea:focus {
+      border-color: var(--neon-blue);
+      box-shadow: 0 0 12px rgba(0, 240, 255, 0.15);
+      background: rgba(0, 0, 0, 0.4);
+    }
+
     button {
-      margin-top: 12px;
-      padding: 8px 16px;
+      margin-top: 16px;
+      padding: 10px 20px;
       border: none;
-      border-radius: 6px;
-      font-size: 12px;
-      font-family: inherit;
-      cursor: pointer;
+      border-radius: 8px;
+      font-size: 14px;
+      font-family: 'Outfit', sans-serif;
       font-weight: 600;
-      transition: opacity 0.15s;
+      cursor: pointer;
+      position: relative;
+      overflow: hidden;
+      transition: all 0.3s ease;
+      color: #fff;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
     }
-    button:hover { opacity: 0.85; }
-    .btn-blue { background: #0066cc; color: #fff; }
-    .btn-green { background: #00aa55; color: #fff; }
-    .btn-red { background: #cc2244; color: #fff; }
-    .btn-orange { background: #cc6600; color: #fff; }
+
+    button::after {
+      content: '';
+      position: absolute;
+      top: 0; left: -100%; width: 50%; height: 100%;
+      background: linear-gradient(to right, transparent, rgba(255,255,255,0.2), transparent);
+      transform: skewX(-20deg);
+      transition: all 0.5s ease;
+    }
+
+    button:hover::after { left: 150%; }
+    button:active { transform: scale(0.97); }
+
+    .btn-gradient { background: var(--accent-gradient); box-shadow: 0 4px 15px rgba(176, 38, 255, 0.3); }
+    .btn-green { background: linear-gradient(135deg, #00b050, #00ff88); box-shadow: 0 4px 15px rgba(0, 255, 136, 0.2); }
+    .btn-red { background: linear-gradient(135deg, #cc2244, var(--neon-red)); box-shadow: 0 4px 15px rgba(255, 42, 85, 0.2); }
+    .btn-orange { background: linear-gradient(135deg, #cc6600, var(--neon-orange)); box-shadow: 0 4px 15px rgba(255, 153, 0, 0.2); }
+    .btn-blue { background: linear-gradient(135deg, #0066cc, var(--neon-blue)); box-shadow: 0 4px 15px rgba(0, 240, 255, 0.2); }
+    .btn-ghost { background: transparent; border: 1px solid rgba(255,255,255,0.2); color: var(--text-main); }
+    .btn-ghost:hover { background: rgba(255,255,255,0.05); border-color: #fff; }
+
     .result {
-      margin-top: 10px;
-      padding: 10px;
-      background: rgba(0,0,0,0.5);
-      border-radius: 6px;
-      font-size: 11px;
+      margin-top: 16px;
+      padding: 14px;
+      background: rgba(0,0,0,0.3);
+      border-radius: 8px;
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 12px;
       word-break: break-all;
       white-space: pre-wrap;
       max-height: 160px;
       overflow-y: auto;
-      border: 1px solid rgba(255,255,255,0.06);
+      border: 1px solid transparent;
+      opacity: 0;
+      animation: fadeIn 0.3s ease forwards;
     }
-    .result.ok { border-color: rgba(0,200,100,0.3); color: #00cc66; }
-    .result.err { border-color: rgba(200,50,50,0.3); color: #ff4466; }
+
+    .result.ok { border-color: rgba(0,255,136,0.3); color: var(--neon-green); }
+    .result.err { border-color: rgba(255,42,85,0.3); color: var(--neon-red); }
+
+    /* Nodes List */
+    .nodes-grid { display: flex; flex-direction: column; gap: 10px; margin-bottom: auto;}
+    
     .node-row {
       display: flex;
       align-items: center;
-      gap: 10px;
-      padding: 8px 0;
-      border-bottom: 1px solid rgba(255,255,255,0.05);
-      font-size: 12px;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 12px;
+      border: 1px solid rgba(255,255,255,0.05);
+      transition: all 0.2s;
     }
-    .node-row:last-child { border-bottom: none; }
+    
+    .node-row:hover {
+      background: rgba(0,0,0,0.4);
+      border-color: rgba(255,255,255,0.15);
+      transform: translateX(4px);
+    }
+
+    .node-info { display: flex; align-items: center; gap: 12px; }
+
     .badge {
-      padding: 2px 8px;
-      border-radius: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
       font-size: 10px;
       font-weight: 700;
       text-transform: uppercase;
+      letter-spacing: 0.5px;
     }
-    .badge.leader { background: #00aa55; color: #fff; }
-    .badge.follower { background: #0055aa; color: #fff; }
-    .badge.candidate { background: #aa7700; color: #fff; }
-    .badge.offline { background: #550022; color: #ff6688; }
+    .badge.leader { background: rgba(0, 255, 136, 0.15); color: var(--neon-green); border: 1px solid rgba(0, 255, 136, 0.3); }
+    .badge.follower { background: rgba(0, 240, 255, 0.15); color: var(--neon-blue); border: 1px solid rgba(0, 240, 255, 0.3); }
+    .badge.candidate { background: rgba(255, 153, 0, 0.15); color: var(--neon-orange); border: 1px solid rgba(255, 153, 0, 0.3); }
+    .badge.offline { background: rgba(255, 42, 85, 0.15); color: var(--neon-red); border: 1px solid rgba(255, 42, 85, 0.3); }
+
+    .node-id { font-weight: 600; font-family: 'JetBrains Mono', monospace; font-size: 14px; }
+    
+    .stats-group { display: flex; gap: 16px; text-align: right; }
+    .stat { display: flex; flex-direction: column; font-size: 10px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.5px; }
+    .stat span { font-size: 14px; font-weight: 600; font-family: 'JetBrains Mono', monospace; color: #fff; margin-top: 2px;}
+
+    /* Keys List */
+    .key-item {
+      padding: 14px;
+      background: rgba(0,0,0,0.2);
+      border-radius: 12px;
+      margin-bottom: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border: 1px solid rgba(255,255,255,0.05);
+      transition: all 0.2s;
+    }
+    
+    .key-item:hover { border-color: rgba(176, 38, 255, 0.3); background: rgba(176, 38, 255, 0.05); }
+    
+    .key-id { font-family: 'JetBrains Mono', monospace; color: var(--neon-purple); font-size: 14px; font-weight: 600; }
+    
+    .empty { color: var(--text-muted); font-size: 14px; font-style: italic; padding: 20px 0; text-align: center; background: rgba(0,0,0,0.1); border-radius: 8px; }
+
+    /* Terminal Log */
     .log-area {
-      background: rgba(0,0,0,0.6);
-      border: 1px solid rgba(255,255,255,0.06);
-      border-radius: 6px;
-      padding: 10px;
-      font-size: 11px;
-      max-height: 200px;
+      background: #0a0c10;
+      border: 1px solid rgba(255,255,255,0.1);
+      border-radius: 12px;
+      padding: 20px;
+      font-size: 13px;
+      font-family: 'JetBrains Mono', monospace;
+      height: 350px;
       overflow-y: auto;
-      color: #8899bb;
+      color: #8b9bb4;
+      box-shadow: inset 0 4px 20px rgba(0,0,0,0.5);
     }
-    .log-line { padding: 2px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
-    .log-line.election { color: #ffcc00; }
-    .log-line.leader { color: #00cc66; }
-    .log-line.vote { color: #00aaff; }
-    .log-line.chaos { color: #ff4466; }
-    .log-line.kms { color: #cc88ff; }
+
+    .log-area::-webkit-scrollbar { width: 8px; }
+    .log-area::-webkit-scrollbar-track { background: transparent; }
+    .log-area::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.2); border-radius: 4px; }
+    
+    .log-line { 
+      padding: 6px 0; 
+      border-bottom: 1px solid rgba(255,255,255,0.03);
+      line-height: 1.5;
+      animation: slideIn 0.2s ease-out;
+    }
+    .log-line:last-child { border-bottom: none; }
+    
+    .log-time { color: #5c6a82; margin-right: 12px; user-select: none; }
+    
+    .log-line.election { color: var(--neon-orange); }
+    .log-line.vote { color: var(--neon-blue); }
+    .log-line.chaos { color: var(--neon-red); }
+    .log-line.kms { color: var(--neon-purple); }
     .log-line.replication { color: #44aaff; }
-    .log-line.commit { color: #00ffaa; }
-    .nodes-grid { display: flex; flex-direction: column; gap: 0; }
-    .stat { color: #6b7a99; font-size: 10px; }
-    .stat span { color: #e0e6f0; }
-    #refreshBtn { background: rgba(255,255,255,0.07); color: #aab; border: 1px solid rgba(255,255,255,0.1); }
-    .section-title { font-size: 10px; color: #6b7a99; text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
-    .key-item { padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 11px; display: flex; justify-content: space-between; }
-    .key-item:last-child { border-bottom: none; }
-    .empty { color: #444; font-size: 11px; padding: 8px 0; }
-    .chaos-row { display: flex; gap: 8px; margin-top: 8px; flex-wrap: wrap; }
-    .node-select { background: rgba(0,0,0,0.4); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: #e0e6f0; padding: 5px 8px; font-size: 11px; font-family: inherit; }
+    .log-line.commit { color: var(--neon-green); }
+
+    .flex-row { display: flex; gap: 16px; width: 100%; align-items: flex-end; }
+    .flex-row > * { flex: 1; }
+    .flex-row > button { margin-top: 0; margin-bottom: 2px; }
+
+    .section-title { font-size: 12px; color: var(--text-muted); text-transform: uppercase; letter-spacing: 1px; margin: 24px 0 12px 0; font-weight: 600;}
+
+    /* CSS Animations */
+    @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+    @keyframes fadeInUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes fadeInDown { from { opacity: 0; transform: translateY(-20px); } to { opacity: 1; transform: translateY(0); } }
+    @keyframes slideIn { from { opacity: 0; transform: translateX(-10px); } to { opacity: 1; transform: translateX(0); } }
   </style>
 </head>
 <body>
-  <h1>⚡ RaftKMS — Test Demo</h1>
-  <p class="subtitle">Localhost-only testing panel · No authentication required · For demo and development use</p>
+  <div class="bg-glow"></div>
+  
+  <header>
+    <h1>⚡ RaftKMS Console</h1>
+    <p class="subtitle">Distributed Key Management · Localhost Test Environment</p>
+  </header>
 
   <div class="grid">
 
     <!-- Cluster Status -->
     <div class="card">
-      <h2>🖧 Cluster Status</h2>
+      <h2>🖧 Cluster Topology</h2>
       <div class="nodes-grid" id="nodesContainer">
-        <div class="empty">Loading...</div>
+        <div class="empty">Establishing connection...</div>
       </div>
-      <button id="refreshBtn" onclick="refreshAll()" style="margin-top:12px">↻ Refresh</button>
+      <button id="refreshBtn" class="btn-ghost" style="width: 100%; margin-top: 20px" onclick="refreshAll()">
+        <svg fill="currentColor" width="16" height="16" viewBox="0 0 16 16"><path fill-rule="evenodd" d="M8 3a5 5 0 1 0 4.546 2.914.5.5 0 0 1 .908-.417A6 6 0 1 1 8 2v1z"/><path d="M8 4.466V.534a.25.25 0 0 1 .41-.192l2.36 1.966c.12.1.12.284 0 .384L8.41 4.658A.25.25 0 0 1 8 4.466z"/></svg>
+        Refresh Topology
+      </button>
     </div>
 
     <!-- Create Key -->
     <div class="card">
-      <h2>🔑 Create Key (No Auth)</h2>
-      <label>Key ID</label>
-      <input id="keyId" placeholder="e.g. user-alice-key" />
-      <button class="btn-green" onclick="createKey()">Create Key via Raft</button>
+      <h2 class="sect-kms">🔑 Key Provisioning</h2>
+      <label>Key Identifier (String)</label>
+      <div class="flex-row">
+        <input id="keyId" placeholder="e.g. app-db-key-1" />
+        <button class="btn-gradient" onclick="createKey()" style="flex: 0 0 auto">Provision</button>
+      </div>
       <div id="createKeyResult" class="result" style="display:none"></div>
 
-      <div style="margin-top:20px">
-        <div class="section-title">Active Keys</div>
-        <div id="keysList"><div class="empty">No keys yet.</div></div>
+      <div class="section-title">Replicated Keys Ledger</div>
+      <div id="keysList" style="flex: 1; overflow-y: auto; max-height: 200px">
+        <div class="empty">Awaiting keys...</div>
       </div>
     </div>
 
     <!-- Encrypt / Decrypt -->
     <div class="card">
-      <h2>🔒 Encrypt / Decrypt</h2>
-      <label>Key ID</label>
-      <input id="encKeyId" placeholder="Key ID to use" />
-      <label>Plaintext</label>
-      <textarea id="encPlaintext" placeholder="Text to encrypt..."></textarea>
-      <button class="btn-blue" onclick="doEncrypt()">Encrypt</button>
+      <h2 class="sect-crypto">🔒 Cryptographic Operations</h2>
+      <label>Target Key ID</label>
+      <input id="encKeyId" placeholder="e.g. app-db-key-1" />
+      
+      <label>Plaintext Payload</label>
+      <textarea id="encPlaintext" placeholder="Enter sensitive data to encrypt..."></textarea>
+      
+      <button class="btn-blue" style="width: 100%" onclick="doEncrypt()">Encrypt Payload</button>
       <div id="encResult" class="result" style="display:none"></div>
 
-      <div style="margin-top:16px">
-        <label>Ciphertext to Decrypt</label>
-        <textarea id="decCiphertext" placeholder="Paste ciphertext here..."></textarea>
-        <label>Key ID</label>
-        <input id="decKeyId" placeholder="Key ID used for encryption" />
-        <button class="btn-orange" onclick="doDecrypt()">Decrypt</button>
-        <div id="decResult" class="result" style="display:none"></div>
+      <div style="width: 100%; height: 1px; background: var(--glass-border); margin: 24px 0;"></div>
+
+      <label>Ciphertext Verification</label>
+      <textarea id="decCiphertext" placeholder="Paste AES-GCM ciphertext here..."></textarea>
+      
+      <div class="flex-row">
+        <div style="flex: 1">
+          <label style="margin-top: 0">Algorithm Key ID</label>
+          <input id="decKeyId" placeholder="Key ID used" />
+        </div>
+        <button class="btn-orange" onclick="doDecrypt()" style="flex: 0 0 auto">Decrypt</button>
       </div>
+      
+      <div id="decResult" class="result" style="display:none"></div>
     </div>
 
     <!-- Chaos / Failover -->
     <div class="card">
-      <h2>💥 Chaos / Failover Simulation</h2>
-      <label>Target Node</label>
-      <select id="chaosNode" class="node-select" style="width:100%">
-        <option value="localhost:5001">node1 (localhost:5001)</option>
-        <option value="localhost:5002">node2 (localhost:5002)</option>
-        <option value="localhost:5003">node3 (localhost:5003)</option>
+      <h2 class="sect-chaos">💥 Chaos Engineering</h2>
+      <p style="font-size: 12px; color: var(--text-muted); margin-bottom: 16px;">Inject faults to test Raft consensus resilience.</p>
+      
+      <label>Target Node Override</label>
+      <select id="chaosNode" class="node-select">
+        <option value="localhost:5001">Node 1 (localhost:5001)</option>
+        <option value="localhost:5002">Node 2 (localhost:5002)</option>
+        <option value="localhost:5003">Node 3 (localhost:5003)</option>
       </select>
-      <div class="chaos-row">
-        <button class="btn-red" onclick="chaosKill()">💀 Kill Node</button>
-        <button class="btn-green" onclick="chaosRevive()">✅ Revive Node</button>
+      
+      <div class="flex-row" style="margin-top: 16px;">
+        <button class="btn-red" onclick="chaosKill()">💀 Kill</button>
+        <button class="btn-green" onclick="chaosRevive()">⚙️ Revive</button>
       </div>
+      
+      <div class="section-title">Network Latency Injection</div>
+      <div class="flex-row">
+        <div style="flex: 1">
+          <label style="margin-top: 0">Simulated Delay (ms)</label>
+          <input id="delayMs" type="number" placeholder="e.g. 300" />
+        </div>
+        <button class="btn-ghost" onclick="setDelay()" style="flex: 0 0 auto; margin-top: 24px;">Apply Delay</button>
+      </div>
+      
       <div id="chaosResult" class="result" style="display:none"></div>
-
-      <div style="margin-top:16px">
-        <label>Delay (ms) — simulates slow network</label>
-        <input id="delayMs" type="number" placeholder="e.g. 300" />
-        <button class="btn-orange" onclick="setDelay()">Set Delay</button>
-      </div>
     </div>
 
     <!-- Live Event Log -->
-    <div class="card" style="grid-column: span 2">
-      <h2>📋 Live Event Stream</h2>
+    <div class="card grid-wide">
+      <h2>📋 Distributed Event Stream</h2>
       <div class="log-area" id="eventLog">
-        <div class="log-line">Connecting to event streams...</div>
+        <div class="log-line"><span class="log-time">[SYSTEM]</span> Initializing event stream listeners...</div>
       </div>
     </div>
 
   </div>
 
   <script>
-    const NODES = ['localhost:5001', 'localhost:5002', 'localhost:5003']
-    let leaderAddr = NODES[0]
-    let eventSources = []
+    const NODES = ['localhost:5001', 'localhost:5002', 'localhost:5003'];
+    let leaderAddr = NODES[0];
+    let eventSources = [];
 
     function getCategory(type) {
-      if (['ELECTION_START', 'LEADER_ELECTED'].includes(type)) return 'election'
-      if (['VOTE_GRANTED', 'VOTE_REJECTED', 'REQUEST_VOTE'].includes(type)) return 'vote'
-      if (['LOG_REPLICATED', 'APPEND_ENTRIES', 'HEARTBEAT'].includes(type)) return 'replication'
-      if (['ENTRY_COMMITTED', 'ENTRY_APPLIED'].includes(type)) return 'commit'
-      if (['CHAOS_KILL', 'CHAOS_REVIVE', 'CHAOS_DELAY', 'CHAOS_DROP', 'ROLE_CHANGE'].includes(type)) return 'chaos'
-      if (type.includes('KMS') || ['KEY_CREATED', 'KEY_DELETED', 'KEY_ROTATED', 'ENCRYPT', 'DECRYPT'].includes(type)) return 'kms'
-      return 'replication'
+      if (['ELECTION_START', 'LEADER_ELECTED'].includes(type)) return 'election';
+      if (['VOTE_GRANTED', 'VOTE_REJECTED', 'REQUEST_VOTE'].includes(type)) return 'vote';
+      if (['LOG_REPLICATED', 'APPEND_ENTRIES', 'HEARTBEAT'].includes(type)) return 'replication';
+      if (['ENTRY_COMMITTED', 'ENTRY_APPLIED'].includes(type)) return 'commit';
+      if (['CHAOS_KILL', 'CHAOS_REVIVE', 'CHAOS_DELAY', 'CHAOS_DROP', 'ROLE_CHANGE'].includes(type)) return 'chaos';
+      if (type.includes('KMS') || ['KEY_CREATED', 'KEY_DELETED', 'KEY_ROTATED', 'ENCRYPT', 'DECRYPT'].includes(type)) return 'kms';
+      return 'replication';
     }
 
     function ts() {
-      return new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 1 })
+      return new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3 });
     }
 
     function appendLog(text, category) {
-      const el = document.getElementById('eventLog')
-      const line = document.createElement('div')
-      line.className = `log-line ${category || ''}`
-      line.textContent = `[${ts()}] ${text}`
-      el.appendChild(line)
+      const el = document.getElementById('eventLog');
+      const line = document.createElement('div');
+      line.className = `log-line ${category || ''}`;
+      line.innerHTML = `<span class="log-time">[${ts()}]</span> <span>${text}</span>`;
+      el.appendChild(line);
       // Keep last 200 lines
-      while (el.children.length > 200) el.removeChild(el.firstChild)
-      el.scrollTop = el.scrollHeight
+      while (el.children.length > 200) el.removeChild(el.firstChild);
+      el.scrollTop = el.scrollHeight;
     }
 
     function connectSSE() {
-      eventSources.forEach(es => es.close())
-      eventSources = []
+      eventSources.forEach(es => es.close());
+      eventSources = [];
       NODES.forEach(addr => {
         try {
-          const es = new EventSource(`http://${addr}/events`)
+          const es = new EventSource(`http://${addr}/events`);
           es.onmessage = (e) => {
             try {
-              const ev = JSON.parse(e.data)
+              const ev = JSON.parse(e.data);
               if (ev.type === 'CONNECTED') {
-                appendLog(`Connected to ${addr}`, 'replication')
-                return
+                appendLog(`Connected to stream at ${addr}`, 'replication');
+                return;
               }
-              const details = ev.details ? JSON.stringify(ev.details) : ''
-              appendLog(`[${ev.node_id}] ${ev.type} T${ev.term} ${details}`, getCategory(ev.type))
+              const details = ev.details ? JSON.stringify(ev.details) : '';
+              appendLog(`[${ev.node_id}] ${ev.type} T${ev.term} ${details}`, getCategory(ev.type));
             } catch {}
-          }
-          es.onerror = () => appendLog(`SSE error on ${addr}`, 'chaos')
-          eventSources.push(es)
+          };
+          es.onerror = () => appendLog(`SSE connection interrupted on ${addr}`, 'chaos');
+          eventSources.push(es);
         } catch {}
-      })
+      });
     }
 
     async function apiFetch(addr, path, method = 'GET', body = null) {
-      const opts = { method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer admin-secret-key' } }
-      if (body) opts.body = JSON.stringify(body)
-      const res = await fetch(`http://${addr}${path}`, opts)
-      const json = await res.json()
-      if (!res.ok) throw new Error(json.error || JSON.stringify(json))
-      return json
+      const opts = { method, headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer admin-secret-key' } };
+      if (body) opts.body = JSON.stringify(body);
+      const res = await fetch(`http://${addr}${path}`, opts);
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || JSON.stringify(json));
+      return json;
     }
 
     async function refreshAll() {
       // Cluster status
-      let found = false
+      let found = false;
       for (const addr of NODES) {
         try {
-          const data = await apiFetch(addr, '/cluster/status')
+          const data = await apiFetch(addr, '/cluster/status');
           if (data.nodes) {
-            renderNodes(data.nodes)
-            const leader = data.nodes.find(n => n.role === 'LEADER' && n.is_alive && !n.is_chaos_killed)
-            if (leader) leaderAddr = leader.address
-            found = true
-            break
+            renderNodes(data.nodes);
+            const leader = data.nodes.find(n => n.role === 'LEADER' && n.is_alive && !n.is_chaos_killed);
+            if (leader) leaderAddr = leader.address;
+            found = true;
+            break;
           }
         } catch {}
       }
       if (!found) {
-        document.getElementById('nodesContainer').innerHTML = '<div class="empty" style="color:#ff4466">Cannot reach any node. Is the cluster running?</div>'
+        document.getElementById('nodesContainer').innerHTML = '<div class="empty" style="color:var(--neon-red)">Cluster unreachable. Ensure nodes are online.</div>';
       }
 
       // Keys
       for (const addr of NODES) {
         try {
-          const data = await apiFetch(addr, '/kms/listKeys')
-          renderKeys(data.keys || [])
-          break
+          const data = await apiFetch(addr, '/kms/listKeys');
+          renderKeys(data.keys || []);
+          break;
         } catch {}
       }
     }
 
     function renderNodes(nodes) {
-      const container = document.getElementById('nodesContainer')
-      container.innerHTML = ''
+      const container = document.getElementById('nodesContainer');
+      container.innerHTML = '';
       nodes.forEach(n => {
-        const alive = n.is_alive && !n.is_chaos_killed
-        const role = alive ? n.role.toLowerCase() : 'offline'
-        const row = document.createElement('div')
-        row.className = 'node-row'
+        const alive = n.is_alive && !n.is_chaos_killed;
+        const role = alive ? n.role.toLowerCase() : 'offline';
+        const row = document.createElement('div');
+        row.className = 'node-row';
         row.innerHTML = `
-          <span class="badge ${role}">${role.toUpperCase()}</span>
-          <span style="flex:1;font-weight:600">${n.node_id}</span>
-          <span class="stat">T<span>${n.current_term}</span></span>
-          <span class="stat">Log:<span>${n.log_length}</span></span>
-          <span class="stat">CI:<span>${n.commit_index}</span></span>
-        `
-        container.appendChild(row)
-      })
+          <div class="node-info">
+            <span class="badge ${role}">${role}</span>
+            <span class="node-id">${n.node_id}</span>
+          </div>
+          <div class="stats-group">
+            <div class="stat">Term<span>${n.current_term}</span></div>
+            <div class="stat">Log<span>${n.log_length}</span></div>
+            <div class="stat">Commit<span>${n.commit_index}</span></div>
+          </div>
+        `;
+        container.appendChild(row);
+      });
     }
 
     function renderKeys(keys) {
-      const el = document.getElementById('keysList')
-      if (!keys.length) { el.innerHTML = '<div class="empty">No keys yet.</div>'; return }
+      const el = document.getElementById('keysList');
+      if (!keys.length) { el.innerHTML = '<div class="empty">No cryptographic keys found.</div>'; return; }
       el.innerHTML = keys.map(k => `
         <div class="key-item">
-          <span style="color:#cc88ff">${k.key_id}</span>
-          <span class="stat">v<span>${k.versions?.length || 1}</span> · <span style="color:${k.status==='active'?'#00cc66':'#ff4466'}">${k.status}</span></span>
+          <span class="key-id">${k.key_id}</span>
+          <div class="stats-group" style="gap: 12px">
+            <div class="stat">Ver<span>v${k.versions?.length || 1}</span></div>
+            <div class="stat">Status<span style="color:${k.status==='active'?'var(--neon-green)':'var(--neon-red)'}">${k.status}</span></div>
+          </div>
         </div>
-      `).join('')
+      `).join('');
     }
 
     function showResult(id, data, ok) {
-      const el = document.getElementById(id)
-      el.style.display = 'block'
-      el.className = `result ${ok ? 'ok' : 'err'}`
-      el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2)
+      const el = document.getElementById(id);
+      el.style.display = 'block';
+      el.className = `result ${ok ? 'ok' : 'err'}`;
+      el.textContent = typeof data === 'string' ? data : JSON.stringify(data, null, 2);
     }
 
     async function createKey() {
-      const keyId = document.getElementById('keyId').value.trim()
-      if (!keyId) { showResult('createKeyResult', 'key_id is required', false); return }
+      const keyId = document.getElementById('keyId').value.trim();
+      if (!keyId) { showResult('createKeyResult', 'Error: key identifier is required.', false); return; }
       try {
-        const data = await apiFetch(leaderAddr, '/test/demo/createKey', 'POST', { key_id: keyId })
-        showResult('createKeyResult', data, true)
-        document.getElementById('keyId').value = ''
-        appendLog(`Key created: ${keyId}`, 'kms')
-        setTimeout(refreshAll, 500)
+        const data = await apiFetch(leaderAddr, '/test/demo/createKey', 'POST', { key_id: keyId });
+        showResult('createKeyResult', data, true);
+        document.getElementById('keyId').value = '';
+        appendLog(`Key material provisioned: ${keyId}`, 'kms');
+        setTimeout(refreshAll, 500);
       } catch (e) {
-        showResult('createKeyResult', e.message, false)
+        showResult('createKeyResult', e.message, false);
       }
     }
 
     async function doEncrypt() {
-      const keyId = document.getElementById('encKeyId').value.trim()
-      const plaintext = document.getElementById('encPlaintext').value
-      if (!keyId || !plaintext) { showResult('encResult', 'key_id and plaintext required', false); return }
+      const keyId = document.getElementById('encKeyId').value.trim();
+      const plaintext = document.getElementById('encPlaintext').value;
+      if (!keyId || !plaintext) { showResult('encResult', 'Error: target key ID and plaintext payload required.', false); return; }
       try {
-        const data = await apiFetch(leaderAddr, '/test/demo/encrypt', 'POST', { key_id: keyId, plaintext })
-        showResult('encResult', data.ciphertext, true)
-        document.getElementById('decCiphertext').value = data.ciphertext
-        document.getElementById('decKeyId').value = keyId
-        appendLog(`Encrypted with key: ${keyId}`, 'kms')
+        const data = await apiFetch(leaderAddr, '/test/demo/encrypt', 'POST', { key_id: keyId, plaintext });
+        showResult('encResult', data.ciphertext, true);
+        document.getElementById('decCiphertext').value = data.ciphertext;
+        document.getElementById('decKeyId').value = keyId;
+        appendLog(`Payload encrypted using target key: ${keyId}`, 'kms');
       } catch (e) {
-        showResult('encResult', e.message, false)
+        showResult('encResult', e.message, false);
       }
     }
 
     async function doDecrypt() {
-      const keyId = document.getElementById('decKeyId').value.trim()
-      const ciphertext = document.getElementById('decCiphertext').value.trim()
-      if (!keyId || !ciphertext) { showResult('decResult', 'key_id and ciphertext required', false); return }
+      const keyId = document.getElementById('decKeyId').value.trim();
+      const ciphertext = document.getElementById('decCiphertext').value.trim();
+      if (!keyId || !ciphertext) { showResult('decResult', 'Error: target key ID and ciphertext payload required.', false); return; }
       try {
-        const data = await apiFetch(leaderAddr, '/kms/decrypt', 'POST', { key_id: keyId, ciphertext })
-        showResult('decResult', data.plaintext, true)
-        appendLog(`Decrypted with key: ${keyId}`, 'kms')
+        const data = await apiFetch(leaderAddr, '/kms/decrypt', 'POST', { key_id: keyId, ciphertext });
+        showResult('decResult', data.plaintext, true);
+        appendLog(`Payload decrypted using algorithm key: ${keyId}`, 'kms');
       } catch (e) {
-        showResult('decResult', e.message, false)
+        showResult('decResult', e.message, false);
       }
     }
 
     async function chaosKill() {
-      const addr = document.getElementById('chaosNode').value
+      const addr = document.getElementById('chaosNode').value;
       try {
-        const data = await fetch(`http://${addr}/chaos/kill`, { method: 'POST' }).then(r => r.json())
-        showResult('chaosResult', data, true)
-        appendLog(`KILLED node at ${addr}`, 'chaos')
-        setTimeout(refreshAll, 1500)
-      } catch (e) { showResult('chaosResult', e.message, false) }
+        const data = await fetch(`http://${addr}/chaos/kill`, { method: 'POST' }).then(r => r.json());
+        showResult('chaosResult', data, true);
+        appendLog(`CRITICAL: Fault injected (KILL) on ${addr}`, 'chaos');
+        setTimeout(refreshAll, 1500);
+      } catch (e) { showResult('chaosResult', e.message, false); }
     }
 
     async function chaosRevive() {
-      const addr = document.getElementById('chaosNode').value
+      const addr = document.getElementById('chaosNode').value;
       try {
-        const data = await fetch(`http://${addr}/chaos/revive`, { method: 'POST' }).then(r => r.json())
-        showResult('chaosResult', data, true)
-        appendLog(`REVIVED node at ${addr}`, 'chaos')
-        setTimeout(refreshAll, 1500)
-      } catch (e) { showResult('chaosResult', e.message, false) }
+        const data = await fetch(`http://${addr}/chaos/revive`, { method: 'POST' }).then(r => r.json());
+        showResult('chaosResult', data, true);
+        appendLog(`SYSTEM: Node recovered (REVIVE) on ${addr}`, 'chaos');
+        setTimeout(refreshAll, 1500);
+      } catch (e) { showResult('chaosResult', e.message, false); }
     }
 
     async function setDelay() {
-      const addr = document.getElementById('chaosNode').value
-      const ms = parseInt(document.getElementById('delayMs').value) || 0
+      const addr = document.getElementById('chaosNode').value;
+      const ms = parseInt(document.getElementById('delayMs').value) || 0;
       try {
         const data = await fetch(`http://${addr}/chaos/delay`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ delay_ms: ms })
-        }).then(r => r.json())
-        showResult('chaosResult', data, true)
-        appendLog(`Set delay ${ms}ms on ${addr}`, 'chaos')
-      } catch (e) { showResult('chaosResult', e.message, false) }
+        }).then(r => r.json());
+        showResult('chaosResult', data, true);
+        appendLog(`LATENCY: Injected ${ms}ms delay on ${addr}`, 'chaos');
+      } catch (e) { showResult('chaosResult', e.message, false); }
     }
 
     // Init
-    connectSSE()
-    refreshAll()
-    setInterval(refreshAll, 3000)
+    connectSSE();
+    refreshAll();
+    setInterval(refreshAll, 3000);
   </script>
 </body>
 </html>
