@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
 import './index.css'
 
-const DEFAULT_NODES = ['localhost:5001', 'localhost:5002', 'localhost:5003']
+const DEFAULT_NODES = ['172.20.10.4:5001', '172.20.10.4:5002', '172.20.10.2:5001']
 const NODE_POSITIONS = {
   0: { cx: '50%', cy: '25%' },
   1: { cx: '25%', cy: '75%' },
