@@ -972,10 +972,7 @@ func (s *Server) handleTestDemoPage(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !isLocalhost(r) {
-		http.Error(w, "test/demo is localhost-only", http.StatusForbidden)
-		return
-	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	fmt.Fprint(w, testDemoHTML)
 }
@@ -986,10 +983,7 @@ func (s *Server) handleTestDemo(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !isLocalhost(r) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "test/demo endpoints are localhost-only"})
-		return
-	}
+
 
 	state := s.raftNode.GetState()
 	keys := s.kmsStore.GetAllKeys()
@@ -1015,10 +1009,7 @@ func (s *Server) handleTestDemoCreateKey(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !isLocalhost(r) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "test/demo endpoints are localhost-only"})
-		return
-	}
+
 
 	if !s.raftNode.IsLeader() {
 		leaderAddr := s.raftNode.GetLeaderAddress()
@@ -1075,10 +1066,7 @@ func (s *Server) handleTestDemoEncrypt(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !isLocalhost(r) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "test/demo endpoints are localhost-only"})
-		return
-	}
+
 
 	var req struct {
 		KeyID     string `json:"key_id"`
@@ -1108,10 +1096,7 @@ func (s *Server) handleTestDemoStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-	if !isLocalhost(r) {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "test/demo endpoints are localhost-only"})
-		return
-	}
+
 
 	state := s.raftNode.GetState()
 	state["chaos"] = s.chaos.GetStatus()
@@ -1179,7 +1164,7 @@ const testDemoHTML = `<!DOCTYPE html>
 </head>
 <body>
   <h1>⚡ RaftKMS — Test Demo</h1>
-  <p class="subtitle">Localhost-only testing panel · No authentication required · For demo and development use</p>
+  <p class="subtitle">Testing panel · No authentication required · For demo and development use</p>
   <div class="grid">
     <div class="card">
       <h2>🖧 Cluster Status</h2>
@@ -1218,9 +1203,7 @@ const testDemoHTML = `<!DOCTYPE html>
       <h2>💥 Chaos / Failover Simulation</h2>
       <label>Target Node</label>
       <select id="chaosNode" class="node-select" style="width:100%">
-        <option value="localhost:5001">node1 (localhost:5001)</option>
-        <option value="localhost:5002">node2 (localhost:5002)</option>
-        <option value="localhost:5003">node3 (localhost:5003)</option>
+
       </select>
       <div class="chaos-row">
         <button class="btn-red" onclick="chaosKill()">💀 Kill Node</button>
@@ -1239,7 +1222,9 @@ const testDemoHTML = `<!DOCTYPE html>
     </div>
   </div>
   <script>
-    const NODES = ['localhost:5001', 'localhost:5002', 'localhost:5003']
+    const HOST = window.location.hostname || 'localhost'
+    const PORT = window.location.port || '5001'
+    const NODES = [HOST + ':' + PORT]
     let leaderAddr = NODES[0]
     let eventSources = []
     function getCategory(type) {
@@ -1294,6 +1279,12 @@ const testDemoHTML = `<!DOCTYPE html>
           const data = await apiFetch(addr, '/cluster/status')
           if (data.nodes) {
             renderNodes(data.nodes)
+            // Update NODES list from cluster status
+            const allAddrs = data.nodes.map(n => n.address)
+            NODES.length = 0; allAddrs.forEach(a => { if (!NODES.includes(a)) NODES.push(a) })
+            // Update chaos dropdown
+            const sel = document.getElementById('chaosNode'); sel.innerHTML = ''
+            data.nodes.forEach(n => { const o = document.createElement('option'); o.value = n.address; o.textContent = n.node_id + ' (' + n.address + ')'; sel.appendChild(o) })
             const leader = data.nodes.find(n => n.role === 'LEADER' && n.is_alive && !n.is_chaos_killed)
             if (leader) leaderAddr = leader.address
             found = true; break

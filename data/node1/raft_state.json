@@ -1,0 +1,18 @@
+{
+  "current_term": 116,
+  "voted_for": "node1",
+  "log": [
+    {
+      "term": 116,
+      "index": 1,
+      "command": {
+        "action": "CREATE_KEY",
+        "payload": {
+          "key_id": "rudra",
+          "key_material": "fvee34O29NB7IMJJOUlfHmxYzddW5H1mrzjRVS0gAQw=",
+          "created_at": "2026-04-08T17:43:57Z"
+        }
+      }
+    }
+  ]
+}
