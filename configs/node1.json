@@ -1,9 +1,0 @@
-{
-  "node_id": "node1",
-  "address": "localhost:5001",
-  "peers": ["localhost:5002", "localhost:5003"],
-  "data_dir": "./data/node1",
-  "election_timeout_min_ms": 1500,
-  "election_timeout_max_ms": 3000,
-  "heartbeat_interval_ms": 500
-}

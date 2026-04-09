@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, KeyRound, ShieldCheck, Users, ScrollText,
-  LogOut, HelpCircle, Lock
+  LogOut, HelpCircle, Lock, ShieldAlert
 } from 'lucide-react';
 
 const NAV = [
@@ -10,6 +10,7 @@ const NAV = [
   { to: '/keys', label: 'Key Registry', icon: KeyRound },
   { to: '/crypto', label: 'Encrypt / Decrypt', icon: ShieldCheck },
   { to: '/audit', label: 'Audit Log', icon: ScrollText },
+  { to: '/security', label: 'Security Audit', icon: ShieldAlert },
 ];
 
 const ADMIN_NAV = [

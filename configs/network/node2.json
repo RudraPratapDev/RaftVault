@@ -1,10 +1,7 @@
 {
   "node_id": "node2",
-  "address": "localhost:5002",
-  "peers": [
-    "localhost:5001",
-    "localhost:5003"
-  ],
+  "address": "172.20.10.4:5002",
+  "peers": ["172.20.10.4:5001", "172.20.10.2:5001"],
   "data_dir": "data/node2",
   "election_timeout_min_ms": 1500,
   "election_timeout_max_ms": 3000,

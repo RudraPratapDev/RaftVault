@@ -7,6 +7,7 @@ import Keys from './components/Keys';
 import CryptoOps from './components/CryptoOps';
 import Users from './components/Users';
 import AuditLog from './components/AuditLog';
+import SecurityAudit from './components/SecurityAudit';
 
 const ProtectedRoute = ({ children }) => {
   const { token, loading } = useAuth();
@@ -45,6 +46,7 @@ export default function App() {
             <Route path="keys" element={<Keys />} />
             <Route path="crypto" element={<CryptoOps />} />
             <Route path="audit" element={<AuditLog />} />
+            <Route path="security" element={<SecurityAudit />} />
             <Route
               path="users"
               element={

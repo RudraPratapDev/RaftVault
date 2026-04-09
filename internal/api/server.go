@@ -7,15 +7,16 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"strings"
 	"raft-kms/internal/chaos"
 	"raft-kms/internal/kms"
 	"raft-kms/internal/raft"
 	"raft-kms/internal/storage"
+	"strings"
 	"time"
 )
 
 type contextKey string
+
 const userContextKey = contextKey("user")
 
 // Server is the HTTP API server
@@ -94,6 +95,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/kms/auditLog", s.cors(s.chaosMiddleware(s.requireAuth(s.handleAuditLog))))
 	mux.HandleFunc("/kms/encrypt", s.cors(s.chaosMiddleware(s.requireAuth(s.handleEncrypt))))
 	mux.HandleFunc("/kms/decrypt", s.cors(s.chaosMiddleware(s.requireAuth(s.handleDecrypt))))
+	mux.HandleFunc("/kms/keyMaterial", s.cors(s.chaosMiddleware(s.requireAuth(s.handleKeyMaterial))))
 
 	// Public KMS endpoints
 	mux.HandleFunc("/kms/login", s.cors(s.chaosMiddleware(s.handleLogin)))
@@ -101,7 +103,7 @@ func (s *Server) Start() error {
 	// Status & cluster endpoints
 	mux.HandleFunc("/status", s.cors(s.handleStatus))
 	mux.HandleFunc("/cluster/status", s.cors(s.handleClusterStatus))
-	
+
 	// Dynamic Cluster Membership (Admin)
 	mux.HandleFunc("/cluster/addNode", s.cors(s.chaosMiddleware(s.requireAdmin(s.handleAddNode))))
 	mux.HandleFunc("/cluster/removeNode", s.cors(s.chaosMiddleware(s.requireAdmin(s.handleRemoveNode))))
@@ -256,31 +258,31 @@ func (s *Server) handleClusterStatus(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type nodeStatus struct {
-		NodeID      string `json:"node_id"`
-		Address     string `json:"address"`
-		Role        string `json:"role"`
-		CurrentTerm int    `json:"current_term"`
-		LeaderID    string `json:"leader_id"`
-		CommitIndex int    `json:"commit_index"`
-		LastApplied int    `json:"last_applied"`
-		LogLength   int    `json:"log_length"`
-		IsAlive     bool   `json:"is_alive"`
-		IsChaosKilled bool `json:"is_chaos_killed"`
+		NodeID        string `json:"node_id"`
+		Address       string `json:"address"`
+		Role          string `json:"role"`
+		CurrentTerm   int    `json:"current_term"`
+		LeaderID      string `json:"leader_id"`
+		CommitIndex   int    `json:"commit_index"`
+		LastApplied   int    `json:"last_applied"`
+		LogLength     int    `json:"log_length"`
+		IsAlive       bool   `json:"is_alive"`
+		IsChaosKilled bool   `json:"is_chaos_killed"`
 	}
 
 	// Self status
 	selfState := s.raftNode.GetState()
 	nodes := []nodeStatus{
 		{
-			NodeID:      s.raftNode.GetID(),
-			Address:     s.address,
-			Role:        selfState["role"].(string),
-			CurrentTerm: selfState["current_term"].(int),
-			LeaderID:    selfState["leader_id"].(string),
-			CommitIndex: selfState["commit_index"].(int),
-			LastApplied: selfState["last_applied"].(int),
-			LogLength:   selfState["log_length"].(int),
-			IsAlive:     !s.chaos.IsKilled(),
+			NodeID:        s.raftNode.GetID(),
+			Address:       s.address,
+			Role:          selfState["role"].(string),
+			CurrentTerm:   selfState["current_term"].(int),
+			LeaderID:      selfState["leader_id"].(string),
+			CommitIndex:   selfState["commit_index"].(int),
+			LastApplied:   selfState["last_applied"].(int),
+			LogLength:     selfState["log_length"].(int),
+			IsAlive:       !s.chaos.IsKilled(),
 			IsChaosKilled: s.chaos.IsKilled(),
 		},
 	}
@@ -575,6 +577,43 @@ func (s *Server) handleListKeys(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"keys":  keys,
 		"count": len(keys),
+	})
+}
+
+// handleKeyMaterial returns the latest key version's raw material (base64) for security analysis.
+// This is intentionally restricted to authenticated users — the material is sent to the
+// local BitSecure analysis server, never stored or logged by the frontend.
+func (s *Server) handleKeyMaterial(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	keyID := r.URL.Query().Get("id")
+	if keyID == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "id query parameter is required"})
+		return
+	}
+
+	key, err := s.kmsStore.GetKey(keyID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	if key.Status == "deleted" {
+		writeJSON(w, http.StatusGone, map[string]string{"error": "key is deleted"})
+		return
+	}
+	if len(key.Versions) == 0 {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "key has no versions"})
+		return
+	}
+
+	latest := key.Versions[len(key.Versions)-1]
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"key_id":       key.KeyID,
+		"version":      latest.Version,
+		"key_material": latest.KeyMaterial, // already base64-encoded
 	})
 }
 
@@ -1019,7 +1058,6 @@ func (s *Server) handleTestDemo(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	state := s.raftNode.GetState()
 	keys := s.kmsStore.GetAllKeys()
 	users := s.kmsStore.GetAllUsers()
@@ -1044,7 +1082,6 @@ func (s *Server) handleTestDemoCreateKey(w http.ResponseWriter, r *http.Request)
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
 
 	if !s.raftNode.IsLeader() {
 		leaderAddr := s.raftNode.GetLeaderAddress()
@@ -1102,7 +1139,6 @@ func (s *Server) handleTestDemoEncrypt(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-
 	var req struct {
 		KeyID     string `json:"key_id"`
 		Plaintext string `json:"plaintext"`
@@ -1131,7 +1167,6 @@ func (s *Server) handleTestDemoStatus(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
-
 
 	state := s.raftNode.GetState()
 	state["chaos"] = s.chaos.GetStatus()
