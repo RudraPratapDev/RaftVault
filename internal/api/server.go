@@ -95,6 +95,9 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/kms/encrypt", s.cors(s.chaosMiddleware(s.requireAuth(s.handleEncrypt))))
 	mux.HandleFunc("/kms/decrypt", s.cors(s.chaosMiddleware(s.requireAuth(s.handleDecrypt))))
 
+	// Public KMS endpoints
+	mux.HandleFunc("/kms/login", s.cors(s.chaosMiddleware(s.handleLogin)))
+
 	// Status & cluster endpoints
 	mux.HandleFunc("/status", s.cors(s.handleStatus))
 	mux.HandleFunc("/cluster/status", s.cors(s.handleClusterStatus))
@@ -770,6 +773,38 @@ func (s *Server) handleDecrypt(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]string{
 		"plaintext": plaintext,
+	})
+}
+
+func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.redirectToLeader(w, r) {
+		return
+	}
+
+	var req struct {
+		Username string `json:"username"`
+		Password string `json:"password"` // We treat API key as password
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	user, err := s.kmsStore.GetUserByAPIKey(req.Password)
+	if err != nil || user.Username != req.Username {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid credentials"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]interface{}{
+		"message": "login successful",
+		"token":   user.APIKey,
+		"user":    user,
 	})
 }
 

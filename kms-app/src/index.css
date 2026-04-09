@@ -1,0 +1,42 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --color-primary: #4F46E5;
+  --color-secondary: #111827;
+  --color-tertiary: #A54100;
+  --color-neutral: #F9FAFB;
+  --color-neutral-dark: #e5e7eb;
+  
+  --color-success: #10B981;
+  --color-warning: #F59E0B;
+  --color-danger: #EF4444;
+
+  --font-sans: 'Inter', sans-serif;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-neutral);
+  color: var(--color-secondary);
+  -webkit-font-smoothing: antialiased;
+}
+
+@layer utilities {
+  .glass-card {
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid rgba(255, 255, 255, 0.5);
+    box-shadow: 0 4px 30px rgba(0, 0, 0, 0.05);
+  }
+}
+
+/* Background pattern from the login mockup */
+.bg-pattern {
+  background-image: 
+    radial-gradient(circle at 50% 50%, rgba(79, 70, 229, 0.05) 0%, transparent 50%),
+    repeating-linear-gradient(45deg, rgba(79, 70, 229, 0.02) 0px, rgba(79, 70, 229, 0.02) 1px, transparent 1px, transparent 10px),
+    repeating-linear-gradient(-45deg, rgba(79, 70, 229, 0.02) 0px, rgba(79, 70, 229, 0.02) 1px, transparent 1px, transparent 10px);
+  background-color: var(--color-neutral);
+}

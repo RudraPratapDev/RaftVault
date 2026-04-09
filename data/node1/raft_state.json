@@ -1,6 +1,6 @@
 {
-  "current_term": 116,
-  "voted_for": "node1",
+  "current_term": 208,
+  "voted_for": "node2",
   "log": [
     {
       "term": 116,
@@ -11,6 +11,166 @@
           "key_id": "rudra",
           "key_material": "fvee34O29NB7IMJJOUlfHmxYzddW5H1mrzjRVS0gAQw=",
           "created_at": "2026-04-08T17:43:57Z"
+        }
+      }
+    },
+    {
+      "term": 206,
+      "index": 2,
+      "command": {
+        "action": "CREATE_KEY",
+        "payload": {
+          "key_id": "anii",
+          "key_material": "VZve5ueDL06nq7NJr+7I8OdZHWGLLxxTxWaYPthYmPs=",
+          "created_at": "2026-04-09T06:01:40Z"
+        }
+      }
+    },
+    {
+      "term": 206,
+      "index": 3,
+      "command": {
+        "action": "AUDIT_LOG",
+        "payload": {
+          "entry": {
+            "timestamp": "2026-04-09T06:02:24Z",
+            "username": "admin",
+            "action": "ENCRYPT",
+            "key_id": "anii"
+          }
+        }
+      }
+    },
+    {
+      "term": 206,
+      "index": 4,
+      "command": {
+        "action": "AUDIT_LOG",
+        "payload": {
+          "entry": {
+            "timestamp": "2026-04-09T06:03:00Z",
+            "username": "admin",
+            "action": "DECRYPT",
+            "key_id": "anii"
+          }
+        }
+      }
+    },
+    {
+      "term": 206,
+      "index": 5,
+      "command": {
+        "action": "CREATE_USER",
+        "payload": {
+          "username": "rudii boi",
+          "role": "service",
+          "api_key": "/TT4zLm5aZufZ/qhVWObkFbNasWCVw0yDJwmWgqyy6A="
+        }
+      }
+    },
+    {
+      "term": 206,
+      "index": 6,
+      "command": {
+        "action": "DELETE_KEY",
+        "payload": {
+          "key_id": "anii"
+        }
+      }
+    },
+    {
+      "term": 206,
+      "index": 7,
+      "command": {
+        "action": "CREATE_KEY",
+        "payload": {
+          "key_id": "darsh",
+          "key_material": "z7qglmLBX/Wj5xZNCUuWoqwTShQdxtbcWZ+Kq5XnYQc=",
+          "created_at": "2026-04-09T06:05:44Z"
+        }
+      }
+    },
+    {
+      "term": 206,
+      "index": 8,
+      "command": {
+        "action": "AUDIT_LOG",
+        "payload": {
+          "entry": {
+            "timestamp": "2026-04-09T06:05:56Z",
+            "username": "admin",
+            "action": "ENCRYPT",
+            "key_id": "darsh"
+          }
+        }
+      }
+    },
+    {
+      "term": 206,
+      "index": 9,
+      "command": {
+        "action": "AUDIT_LOG",
+        "payload": {
+          "entry": {
+            "timestamp": "2026-04-09T06:06:07Z",
+            "username": "admin",
+            "action": "DECRYPT",
+            "key_id": "darsh"
+          }
+        }
+      }
+    },
+    {
+      "term": 208,
+      "index": 10,
+      "command": {
+        "action": "AUDIT_LOG",
+        "payload": {
+          "entry": {
+            "timestamp": "2026-04-09T06:10:20Z",
+            "username": "rudii boi",
+            "action": "ENCRYPT",
+            "key_id": "darsh"
+          }
+        }
+      }
+    },
+    {
+      "term": 208,
+      "index": 11,
+      "command": {
+        "action": "AUDIT_LOG",
+        "payload": {
+          "entry": {
+            "timestamp": "2026-04-09T06:10:39Z",
+            "username": "rudii boi",
+            "action": "DECRYPT",
+            "key_id": "darsh"
+          }
+        }
+      }
+    },
+    {
+      "term": 208,
+      "index": 12,
+      "command": {
+        "action": "ROTATE_KEY",
+        "payload": {
+          "key_id": "rudra",
+          "key_material": "tDFg+6cLhgGp1EbUVFPIwWJrOJ5UfJ5DmLstQwGgNV4=",
+          "created_at": "2026-04-09T06:14:02Z"
+        }
+      }
+    },
+    {
+      "term": 208,
+      "index": 13,
+      "command": {
+        "action": "ROTATE_KEY",
+        "payload": {
+          "key_id": "rudra",
+          "key_material": "Cj+DDfL3O1sbULfvmQrF3y0mQbuG1gbXd43MnzCg14k=",
+          "created_at": "2026-04-09T06:14:14Z"
         }
       }
     }
