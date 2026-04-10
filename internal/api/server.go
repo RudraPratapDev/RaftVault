@@ -2,7 +2,13 @@ package api
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/sha256"
+	"crypto/x509"
+	"encoding/base64"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"log"
@@ -96,6 +102,7 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/kms/encrypt", s.cors(s.chaosMiddleware(s.requireAuth(s.handleEncrypt))))
 	mux.HandleFunc("/kms/decrypt", s.cors(s.chaosMiddleware(s.requireAuth(s.handleDecrypt))))
 	mux.HandleFunc("/kms/keyMaterial", s.cors(s.chaosMiddleware(s.requireAuth(s.handleKeyMaterial))))
+	mux.HandleFunc("/kms/exportKey", s.cors(s.chaosMiddleware(s.requireAuth(s.handleExportKey))))
 
 	// Public KMS endpoints
 	mux.HandleFunc("/kms/login", s.cors(s.chaosMiddleware(s.handleLogin)))
@@ -614,6 +621,97 @@ func (s *Server) handleKeyMaterial(w http.ResponseWriter, r *http.Request) {
 		"key_id":       key.KeyID,
 		"version":      latest.Version,
 		"key_material": latest.KeyMaterial, // already base64-encoded
+	})
+}
+
+func (s *Server) handleExportKey(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	if s.redirectToLeader(w, r) {
+		return
+	}
+
+	var req struct {
+		KeyID     string `json:"key_id"`
+		PublicKey string `json:"public_key"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	key, err := s.kmsStore.GetKey(req.KeyID)
+	if err != nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": err.Error()})
+		return
+	}
+	if key.Status == "deleted" {
+		writeJSON(w, http.StatusGone, map[string]string{"error": "key is deleted"})
+		return
+	}
+	if len(key.Versions) == 0 {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "key has no versions"})
+		return
+	}
+
+	latest := key.Versions[len(key.Versions)-1]
+	keyBytes, err := base64.StdEncoding.DecodeString(latest.KeyMaterial)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to decode material"})
+		return
+	}
+
+	// Parse PEM
+	block, _ := pem.Decode([]byte(req.PublicKey))
+	if block == nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to parse PEM formatted public key"})
+		return
+	}
+
+	pub, err := x509.ParsePKIXPublicKey(block.Bytes)
+	if err != nil {
+		// Try parsing as PKCS1
+		pub, err = x509.ParsePKCS1PublicKey(block.Bytes)
+		if err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{"error": "failed to parse RSA public key: " + err.Error()})
+			return
+		}
+	}
+
+	rsaPub, ok := pub.(*rsa.PublicKey)
+	if !ok {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "not an RSA public key"})
+		return
+	}
+
+	wrappedBytes, err := rsa.EncryptOAEP(sha256.New(), rand.Reader, rsaPub, keyBytes, nil)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "encryption failed: " + err.Error()})
+		return
+	}
+
+	user := r.Context().Value(userContextKey).(*kms.User)
+
+	s.events.Add(raft.EventKMSCommand, s.raftNode.GetID(), 0, map[string]interface{}{"action": "EXPORT", "key_id": req.KeyID, "user": user.Username})
+
+	go func() {
+		auditPayload := kms.AuditLogPayload{
+			Entry: kms.AuditEntry{
+				Timestamp: kms.Now(),
+				Username:  user.Username,
+				Action:    "EXPORT",
+				KeyID:     req.KeyID,
+			},
+		}
+		data, _ := json.Marshal(auditPayload)
+		s.raftNode.SubmitCommand(storage.Command{Action: "AUDIT_LOG", Payload: data})
+	}()
+
+	writeJSON(w, http.StatusOK, map[string]string{
+		"wrapped_key": base64.StdEncoding.EncodeToString(wrappedBytes),
 	})
 }
 

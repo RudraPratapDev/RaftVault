@@ -3,7 +3,9 @@ package kms
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/binary"
 	"encoding/json"
@@ -32,10 +34,12 @@ type User struct {
 
 // AuditEntry represents an unalterable record of cryptographic operation
 type AuditEntry struct {
-	Timestamp string `json:"timestamp"`
-	Username  string `json:"username"`
-	Action    string `json:"action"` // "ENCRYPT" or "DECRYPT"
-	KeyID     string `json:"key_id"`
+	Timestamp    string `json:"timestamp"`
+	Username     string `json:"username"`
+	Action       string `json:"action"` // "ENCRYPT" or "DECRYPT"
+	KeyID        string `json:"key_id"`
+	PreviousHash string `json:"previous_hash"`
+	CurrentHash  string `json:"current_hash"`
 }
 
 // KeyVersion represents a specific version of a key
@@ -91,20 +95,24 @@ type AuditLogPayload struct {
 
 // KMSStore is the in-memory key management store (state machine)
 type KMSStore struct {
-	mu         sync.RWMutex
-	keys       map[string]*Key
-	users      map[string]*User // Keyed by Username
-	apiKeys    map[string]*User // Keyed by APIKey for fast auth
-	auditTrail []AuditEntry
+	mu           sync.RWMutex
+	keys         map[string]*Key
+	users        map[string]*User // Keyed by Username
+	apiKeys      map[string]*User // Keyed by APIKey for fast auth
+	auditTrail   []AuditEntry
+	auditHMACKey []byte
+	lastHash     string
 }
 
 // NewKMSStore creates a new KMSStore
 func NewKMSStore() *KMSStore {
 	store := &KMSStore{
-		keys:       make(map[string]*Key),
-		users:      make(map[string]*User),
-		apiKeys:    make(map[string]*User),
-		auditTrail: make([]AuditEntry, 0),
+		keys:         make(map[string]*Key),
+		users:        make(map[string]*User),
+		apiKeys:      make(map[string]*User),
+		auditTrail:   make([]AuditEntry, 0),
+		auditHMACKey: []byte("raft-kms-audit-hmac-secret-key-12345"),
+		lastHash:     "0000000000000000000000000000000000000000000000000000000000000000",
 	}
 
 	// Bootstrap default admin identity
@@ -260,8 +268,18 @@ func (s *KMSStore) applyDeleteUser(p DeleteUserPayload) (interface{}, error) {
 }
 
 func (s *KMSStore) applyAuditLog(p AuditLogPayload) (interface{}, error) {
+	p.Entry.PreviousHash = s.lastHash
+	mac := hmac.New(sha256.New, s.auditHMACKey)
+	
+	// Create canonical payload data for hashing (without CurrentHash)
+	data := fmt.Sprintf("%s|%s|%s|%s|%s", p.Entry.PreviousHash, p.Entry.Timestamp, p.Entry.Username, p.Entry.Action, p.Entry.KeyID)
+	mac.Write([]byte(data))
+	
+	p.Entry.CurrentHash = fmt.Sprintf("%x", mac.Sum(nil))
+	s.lastHash = p.Entry.CurrentHash
+
 	s.auditTrail = append(s.auditTrail, p.Entry)
-	log.Printf("[KMS/AUDIT] User %s performed %s on Key %s", p.Entry.Username, p.Entry.Action, p.Entry.KeyID)
+	log.Printf("[KMS/AUDIT] User %s performed %s on Key %s (Hash: %s)", p.Entry.Username, p.Entry.Action, p.Entry.KeyID, p.Entry.CurrentHash[:8])
 	return p.Entry, nil
 }
 
@@ -324,7 +342,40 @@ func (s *KMSStore) GetAuditTrail() []AuditEntry {
 	return trail
 }
 
-// GenerateKeyMaterial generates a random 256-bit AES key and returns it base64-encoded
+// hkdfExtract implements HKDF-Extract
+func hkdfExtract(salt, ikm []byte) []byte {
+	if len(salt) == 0 {
+		salt = make([]byte, sha256.Size)
+	}
+	mac := hmac.New(sha256.New, salt)
+	mac.Write(ikm)
+	return mac.Sum(nil)
+}
+
+// hkdfExpand implements HKDF-Expand
+func hkdfExpand(prk, info []byte, length int) []byte {
+	var okm []byte
+	var t []byte
+	var i byte = 1
+	for len(okm) < length {
+		mac := hmac.New(sha256.New, prk)
+		mac.Write(t)
+		mac.Write(info)
+		mac.Write([]byte{i})
+		t = mac.Sum(nil)
+		okm = append(okm, t...)
+		i++
+	}
+	return okm[:length]
+}
+
+// HKDF derives a key from master secret
+func HKDF(masterSecret, salt, info []byte, length int) []byte {
+	prk := hkdfExtract(salt, masterSecret)
+	return hkdfExpand(prk, info, length)
+}
+
+// GenerateKeyMaterial generates a random 256-bit master secret and returns it base64-encoded
 func GenerateKeyMaterial() (string, error) {
 	key := make([]byte, 32) // 256 bits
 	if _, err := rand.Read(key); err != nil {
@@ -333,7 +384,7 @@ func GenerateKeyMaterial() (string, error) {
 	return base64.StdEncoding.EncodeToString(key), nil
 }
 
-// Encrypt encrypts plaintext using the latest version of the specified key
+// Encrypt encrypts plaintext using the latest version of the specified key via Envelope Encryption
 func (s *KMSStore) Encrypt(keyID string, plaintext string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -348,39 +399,66 @@ func (s *KMSStore) Encrypt(keyID string, plaintext string) (string, error) {
 
 	latestVersion := key.Versions[len(key.Versions)-1]
 
-	keyBytes, err := base64.StdEncoding.DecodeString(latestVersion.KeyMaterial)
+	masterBytes, err := base64.StdEncoding.DecodeString(latestVersion.KeyMaterial)
 	if err != nil {
 		return "", fmt.Errorf("failed to decode key material: %w", err)
 	}
 
-	block, err := aes.NewCipher(keyBytes)
+	// 1. Derive KEK using HKDF
+	info := []byte(fmt.Sprintf("%s:%d:%s", key.KeyID, latestVersion.Version, latestVersion.CreatedAt))
+	kek := HKDF(masterBytes, nil, info, 32)
+	kekBlock, err := aes.NewCipher(kek)
 	if err != nil {
-		return "", fmt.Errorf("failed to create cipher: %w", err)
+		return "", fmt.Errorf("failed to create KEK cipher: %w", err)
 	}
-
-	aesGCM, err := cipher.NewGCM(block)
+	kekGCM, err := cipher.NewGCM(kekBlock)
 	if err != nil {
-		return "", fmt.Errorf("failed to create GCM: %w", err)
+		return "", fmt.Errorf("failed to create KEK GCM: %w", err)
 	}
 
-	nonce := make([]byte, aesGCM.NonceSize())
-	if _, err := io.ReadFull(rand.Reader, nonce); err != nil {
-		return "", fmt.Errorf("failed to generate nonce: %w", err)
+	// 2. Generate random DEK
+	dek := make([]byte, 32)
+	if _, err := io.ReadFull(rand.Reader, dek); err != nil {
+		return "", fmt.Errorf("failed to generate DEK: %w", err)
 	}
 
-	// Prepend version number (4 bytes big endian) to ciphertext for version tracking
+	// 3. Wrap DEK with KEK
+	kekNonce := make([]byte, kekGCM.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, kekNonce); err != nil {
+		return "", fmt.Errorf("failed to generate KEK nonce: %w", err)
+	}
+	wrappedDEK := kekGCM.Seal(kekNonce, kekNonce, dek, nil) // Nonce is prepended to wrapped key
+
+	// 4. Encrypt data with DEK
+	dekBlock, err := aes.NewCipher(dek)
+	if err != nil {
+		return "", fmt.Errorf("failed to create DEK cipher: %w", err)
+	}
+	dekGCM, err := cipher.NewGCM(dekBlock)
+	if err != nil {
+		return "", fmt.Errorf("failed to create DEK GCM: %w", err)
+	}
+	dekNonce := make([]byte, dekGCM.NonceSize())
+	if _, err := io.ReadFull(rand.Reader, dekNonce); err != nil {
+		return "", fmt.Errorf("failed to generate DEK nonce: %w", err)
+	}
+	ciphertext := dekGCM.Seal(dekNonce, dekNonce, []byte(plaintext), nil) // Nonce prepended
+
+	// Format: version(4) + wrappedDEKLen(2) + wrappedDEK + ciphertext
 	versionBytes := make([]byte, 4)
 	binary.BigEndian.PutUint32(versionBytes, uint32(latestVersion.Version))
 
-	ciphertext := aesGCM.Seal(nonce, nonce, []byte(plaintext), nil)
+	wrappedDEKLen := make([]byte, 2)
+	binary.BigEndian.PutUint16(wrappedDEKLen, uint16(len(wrappedDEK)))
 
-	// Format: version_bytes + ciphertext (with nonce prepended)
-	combined := append(versionBytes, ciphertext...)
+	combined := append(versionBytes, wrappedDEKLen...)
+	combined = append(combined, wrappedDEK...)
+	combined = append(combined, ciphertext...)
 
 	return base64.StdEncoding.EncodeToString(combined), nil
 }
 
-// Decrypt decrypts ciphertext, automatically detecting the key version used
+// Decrypt decrypts ciphertext via Envelope Encryption, automatically detecting the key version used
 func (s *KMSStore) Decrypt(keyID string, ciphertextB64 string) (string, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -395,13 +473,20 @@ func (s *KMSStore) Decrypt(keyID string, ciphertextB64 string) (string, error) {
 		return "", fmt.Errorf("failed to decode ciphertext: %w", err)
 	}
 
-	if len(combined) < 4 {
+	if len(combined) < 6 {
 		return "", fmt.Errorf("ciphertext too short")
 	}
 
-	// Extract version
+	// Extract version and lengths
 	version := int(binary.BigEndian.Uint32(combined[:4]))
-	ciphertext := combined[4:]
+	wrappedDEKLen := int(binary.BigEndian.Uint16(combined[4:6]))
+	
+	if 6+wrappedDEKLen > len(combined) {
+		return "", fmt.Errorf("malformed ciphertext: wrapped DEK length exceeds bounds")
+	}
+
+	wrappedDEKFull := combined[6 : 6+wrappedDEKLen]
+	ciphertextFull := combined[6+wrappedDEKLen:]
 
 	// Find the key version
 	if version < 1 || version > len(key.Versions) {
@@ -409,28 +494,51 @@ func (s *KMSStore) Decrypt(keyID string, ciphertextB64 string) (string, error) {
 	}
 
 	keyVersion := key.Versions[version-1]
-	keyBytes, err := base64.StdEncoding.DecodeString(keyVersion.KeyMaterial)
+	masterBytes, err := base64.StdEncoding.DecodeString(keyVersion.KeyMaterial)
 	if err != nil {
-		return "", fmt.Errorf("failed to decode key material: %w", err)
+		return "", fmt.Errorf("failed to decode master material: %w", err)
 	}
 
-	block, err := aes.NewCipher(keyBytes)
+	// 1. Derive KEK via HKDF
+	info := []byte(fmt.Sprintf("%s:%d:%s", key.KeyID, keyVersion.Version, keyVersion.CreatedAt))
+	kek := HKDF(masterBytes, nil, info, 32)
+	kekBlock, err := aes.NewCipher(kek)
 	if err != nil {
-		return "", fmt.Errorf("failed to create cipher: %w", err)
+		return "", fmt.Errorf("failed to create KEK cipher: %w", err)
 	}
-
-	aesGCM, err := cipher.NewGCM(block)
+	kekGCM, err := cipher.NewGCM(kekBlock)
 	if err != nil {
-		return "", fmt.Errorf("failed to create GCM: %w", err)
+		return "", fmt.Errorf("failed to create KEK GCM: %w", err)
 	}
 
-	nonceSize := aesGCM.NonceSize()
-	if len(ciphertext) < nonceSize {
-		return "", fmt.Errorf("ciphertext too short for nonce")
+	// 2. Unwrap DEK
+	kekNonceSize := kekGCM.NonceSize()
+	if len(wrappedDEKFull) < kekNonceSize {
+		return "", fmt.Errorf("wrapped DEK too short")
+	}
+	kekNonce, wrappedDEKBytes := wrappedDEKFull[:kekNonceSize], wrappedDEKFull[kekNonceSize:]
+	dek, err := kekGCM.Open(nil, kekNonce, wrappedDEKBytes, nil)
+	if err != nil {
+		return "", fmt.Errorf("failed to unwrap DEK: %w", err)
 	}
 
-	nonce, ciphertextBytes := ciphertext[:nonceSize], ciphertext[nonceSize:]
-	plaintext, err := aesGCM.Open(nil, nonce, ciphertextBytes, nil)
+	// 3. Decrypt payload with DEK
+	dekBlock, err := aes.NewCipher(dek)
+	if err != nil {
+		return "", fmt.Errorf("failed to create DEK cipher: %w", err)
+	}
+	dekGCM, err := cipher.NewGCM(dekBlock)
+	if err != nil {
+		return "", fmt.Errorf("failed to create DEK GCM: %w", err)
+	}
+
+	dekNonceSize := dekGCM.NonceSize()
+	if len(ciphertextFull) < dekNonceSize {
+		return "", fmt.Errorf("ciphertext payload too short")
+	}
+
+	dekNonce, ciphertextBytes := ciphertextFull[:dekNonceSize], ciphertextFull[dekNonceSize:]
+	plaintext, err := dekGCM.Open(nil, dekNonce, ciphertextBytes, nil)
 	if err != nil {
 		return "", fmt.Errorf("decryption failed: %w", err)
 	}

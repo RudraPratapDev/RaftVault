@@ -60,6 +60,12 @@ function App() {
   const [newNodeAddr, setNewNodeAddr] = useState('')
   const [partSource, setPartSource] = useState('')
   const [partTarget, setPartTarget] = useState('')
+  
+  // New Crypto Actions
+  const [exportKeyId, setExportKeyId] = useState('')
+  const [exportPubKey, setExportPubKey] = useState('')
+  const [exportResult, setExportResult] = useState(null)
+  const [mlResult, setMlResult] = useState(null)
 
   const eventsRef = useRef(null)
   const eventSourcesRef = useRef([])
@@ -264,6 +270,32 @@ function App() {
     } catch (e) { setEncResult({ type: 'error', data: e.message }) }
   }
 
+  const handleExport = async () => {
+    try {
+      const data = await api(leaderAddr, '/kms/exportKey', 'POST', { key_id: exportKeyId, public_key: exportPubKey })
+      setExportResult({ type: 'success', data: data.wrapped_key })
+      showToast(`Key successfully securely wrapped for export!`)
+    } catch (e) { setExportResult({ type: 'error', data: e.message }) }
+  }
+
+  const handleAnalyze = async (key_id) => {
+    try {
+      const materialRes = await api(leaderAddr, `/kms/keyMaterial?id=${key_id}`, 'GET');
+      const key_material = materialRes.key_material;
+      
+      const mlRes = await fetch("http://localhost:7777/analyze", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({ key_id, key_material })
+      });
+      const mlData = await mlRes.json();
+      if (!mlRes.ok) throw new Error(mlData.error || "ML Analysis failed");
+      
+      setMlResult(mlData);
+      showToast(`ML Analysis complete! Verdict: ${mlData.verdict}`);
+    } catch (e) { showToast(e.message, 'error') }
+  }
+
   const handleAddNode = async () => {
     try {
       await api(leaderAddr, '/cluster/addNode', 'POST', { address: newNodeAddr })
@@ -362,9 +394,15 @@ function App() {
                 <div className="event-details">
                   <span style={{color: 'var(--neon-purple)', fontWeight: 600}}>@{entry.username}</span> 
                   {' performed '}
-                  <span style={{color: entry.action==='ENCRYPT'?'var(--neon-green)':'var(--neon-orange)', fontWeight: 600}}>{entry.action}</span>
+                  <span style={{color: entry.action==='ENCRYPT'?'var(--neon-green)':(entry.action==='EXPORT'?'var(--neon-cyan)':'var(--neon-orange)'), fontWeight: 600}}>{entry.action}</span>
                   {' on Key '}
                   <span style={{color: 'var(--text-primary)'}}>{entry.key_id}</span>
+                  {(entry.previous_hash || entry.current_hash) && (
+                    <div style={{fontSize: 9, fontFamily: 'monospace', color: 'var(--text-muted)', marginTop: 4, background: 'rgba(0,0,0,0.3)', padding: 4, borderRadius: 3}}>
+                      <div>Prev: {entry.previous_hash ? entry.previous_hash.substring(0,16)+'...' : 'genesis'}</div>
+                      <div>Hash: <span style={{color: 'var(--neon-cyan)'}}>{entry.current_hash.substring(0,16)}...</span></div>
+                    </div>
+                  )}
                 </div>
               </div>
             ))}
@@ -483,13 +521,33 @@ function App() {
             </div>}
             <div className="form-group" style={{marginBottom: 24}}>
               {keys.map(k => (
-                <div key={k.key_id} className="key-list-item">
+                <div key={k.key_id} className="key-list-item" style={{display:'flex', justifyContent:'space-between'}}>
                   <span style={{fontWeight:600}}>{k.key_id} <span style={{color:'var(--text-muted)'}}>(v{k.versions?.length||1})</span></span>
-                  {isAdmin && k.status === 'active' && <button className="btn btn-danger" style={{padding:'2px 6px', fontSize: 9}} onClick={()=>api(leaderAddr, '/kms/deleteKey', 'POST', {key_id: k.key_id})}>Del</button>}
+                  <div style={{display:'flex', gap:4}}>
+                    <button className="btn btn-primary" style={{padding:'2px 6px', fontSize: 9}} onClick={()=>handleAnalyze(k.key_id)}>Analyze (ML)</button>
+                    {isAdmin && k.status === 'active' && <button className="btn btn-danger" style={{padding:'2px 6px', fontSize: 9}} onClick={()=>api(leaderAddr, '/kms/deleteKey', 'POST', {key_id: k.key_id})}>Del</button>}
+                  </div>
                 </div>
               ))}
               {keys.length === 0 && <div style={{fontSize:11, color:'var(--text-muted)'}}>No active keys. Admins must generate a key first.</div>}
             </div>
+            
+            {mlResult && (
+              <div style={{marginBottom: 24, padding: 12, borderRadius: 8, background: 'rgba(0,0,0,0.4)', border: `1px solid ${mlResult.verdict==='SECURE'?'var(--neon-green)':'var(--neon-red)'}`}}>
+                <div style={{fontSize:12, fontWeight:600, color:'var(--text-primary)', marginBottom: 8}}>BitSecure ML Evaluation ({mlResult.key_id})</div>
+                <div style={{fontSize:11, display:'flex', justifyContent:'space-between', marginBottom: 4}}>
+                  <span>Verdict: <span style={{color:mlResult.verdict==='SECURE'?'var(--neon-green)':'var(--neon-red)', fontWeight:800}}>{mlResult.verdict}</span></span>
+                  <span>Confidence: {(mlResult.confidence * 100).toFixed(1)}%</span>
+                </div>
+                <div style={{fontSize:10, color:'var(--text-secondary)'}}>
+                  Passes NIST: {mlResult.nist?.passed_count}/3
+                </div>
+                <div style={{fontSize:10, color:'var(--text-secondary)'}}>
+                  Key Derivation (HKDF): Enabled & Evaluated
+                </div>
+                <button className="btn" style={{marginTop: 8, fontSize: 9, width:'100%', justifyContent:'center'}} onClick={() => setMlResult(null)}>Dismiss</button>
+              </div>
+            )}
 
             <h4 className="form-label" style={{color:'var(--neon-cyan)'}}>Data Encryption (AES-GCM)</h4>
             <div className="form-group" style={{marginBottom: 24}}>
@@ -500,6 +558,17 @@ function App() {
               <textarea className="input-glass" style={{width:'100%', minHeight: 60, marginBottom:8, resize:'vertical'}} placeholder="Plaintext to encrypt..." value={encPlaintext} onChange={e=>setEncPlaintext(e.target.value)} />
               <button className="btn btn-success" style={{width:'100%', justifyContent: 'center'}} onClick={handleEncrypt}>Encrypt & Audit</button>
               {encResult && <div style={{fontSize:10,marginTop:6,wordBreak:'break-all',padding:8,background:'rgba(0,0,0,0.3)',borderRadius:6,color:encResult.type==='error'?'var(--neon-red)':'var(--neon-green)'}}>{encResult.data}</div>}
+            </div>
+            
+            <h4 className="form-label" style={{color:'var(--neon-cyan)'}}>RSA-OAEP Key Export</h4>
+            <div className="form-group" style={{marginBottom: 24}}>
+              <select className="input-glass" style={{width:'100%', marginBottom:8}} value={exportKeyId} onChange={e=>setExportKeyId(e.target.value)}>
+                <option value="">Select Key to Export...</option>
+                {keys.map(k => <option key={k.key_id} value={k.key_id}>{k.key_id}</option>)}
+              </select>
+              <textarea className="input-glass" style={{width:'100%', minHeight: 60, marginBottom:8, resize:'vertical'}} placeholder="Recipient's RSA Public Key (PEM)..." value={exportPubKey} onChange={e=>setExportPubKey(e.target.value)} />
+              <button className="btn btn-primary" style={{width:'100%', justifyContent: 'center'}} onClick={handleExport}>Wrap & Export</button>
+              {exportResult && <div style={{fontSize:10,marginTop:6,wordBreak:'break-all',padding:8,background:'rgba(0,0,0,0.3)',borderRadius:6,color:exportResult.type==='error'?'var(--neon-red)':'var(--neon-blue)'}}>{exportResult.data}</div>}
             </div>
 
             {isAdmin && (
