@@ -1,7 +1,74 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../utils/api';
-import { Lock, Unlock, Copy, Check, ChevronDown } from 'lucide-react';
+import { Lock, Unlock, Copy, Check, ChevronDown, Layers, Key, ArrowDown, Database } from 'lucide-react';
+
+// Visual breakdown of the envelope encryption layers
+function EnvelopeVisualizer({ info }) {
+  if (!info) return null;
+  return (
+    <div className="bg-white rounded-xl border border-indigo-100 shadow-sm p-6 space-y-4">
+      <div className="flex items-center gap-2 mb-1">
+        <Layers size={15} className="text-indigo-500" />
+        <span className="text-xs font-bold text-gray-800 uppercase tracking-widest">Envelope Encryption Breakdown</span>
+      </div>
+      <p className="text-[11px] text-gray-400 leading-relaxed">
+        Your plaintext was never touched by the master key. Here's exactly what happened inside the vault:
+      </p>
+
+      {/* Step 1: HKDF */}
+      <div className="rounded-lg border border-gray-100 overflow-hidden">
+        <div className="bg-violet-50 px-4 py-2 flex items-center gap-2">
+          <span className="text-[10px] font-bold text-violet-700 uppercase tracking-widest">Step 1 — HKDF-SHA256 Key Derivation</span>
+        </div>
+        <div className="px-4 py-3 space-y-1.5 text-[11px]">
+          <div className="flex gap-2"><span className="text-gray-400 w-32 shrink-0">Master Secret</span><span className="font-mono text-gray-600">Key v{info.key_version} material (256-bit, stored in Raft)</span></div>
+          <div className="flex gap-2"><span className="text-gray-400 w-32 shrink-0">HKDF Context</span><span className="font-mono text-gray-700 bg-gray-50 px-1.5 py-0.5 rounded break-all">{info.hkdf_info}</span></div>
+          <div className="flex gap-2"><span className="text-gray-400 w-32 shrink-0">Derived KEK</span><span className="font-mono text-violet-700 bg-violet-50 px-1.5 py-0.5 rounded">{info.kek_hex} (256-bit)</span></div>
+          <p className="text-gray-400 mt-1">The KEK is derived fresh every time using HKDF — it never leaves memory and is never stored.</p>
+        </div>
+      </div>
+
+      <div className="flex justify-center"><ArrowDown size={16} className="text-gray-300" /></div>
+
+      {/* Step 2: DEK */}
+      <div className="rounded-lg border border-gray-100 overflow-hidden">
+        <div className="bg-amber-50 px-4 py-2 flex items-center gap-2">
+          <span className="text-[10px] font-bold text-amber-700 uppercase tracking-widest">Step 2 — Random DEK Generation + Wrapping</span>
+        </div>
+        <div className="px-4 py-3 space-y-1.5 text-[11px]">
+          <div className="flex gap-2"><span className="text-gray-400 w-32 shrink-0">Fresh DEK</span><span className="font-mono text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded">{info.dek_hex} (256-bit, random per operation)</span></div>
+          <div className="flex gap-2"><span className="text-gray-400 w-32 shrink-0">Wrapped DEK</span><span className="font-mono text-gray-600 break-all">{info.wrapped_dek_b64?.slice(0, 40)}… ({info.wrapped_dek_len} bytes)</span></div>
+          <p className="text-gray-400 mt-1">AES-256-GCM(KEK, DEK) — the DEK is encrypted by the KEK and travels with the ciphertext.</p>
+        </div>
+      </div>
+
+      <div className="flex justify-center"><ArrowDown size={16} className="text-gray-300" /></div>
+
+      {/* Step 3: Data encryption */}
+      <div className="rounded-lg border border-gray-100 overflow-hidden">
+        <div className="bg-indigo-50 px-4 py-2 flex items-center gap-2">
+          <span className="text-[10px] font-bold text-indigo-700 uppercase tracking-widest">Step 3 — Data Encryption with DEK</span>
+        </div>
+        <div className="px-4 py-3 space-y-1.5 text-[11px]">
+          <div className="flex gap-2"><span className="text-gray-400 w-32 shrink-0">Plaintext</span><span className="font-mono text-gray-600">{info.plaintext_len} bytes</span></div>
+          <div className="flex gap-2"><span className="text-gray-400 w-32 shrink-0">Ciphertext</span><span className="font-mono text-gray-600 break-all">{info.ciphertext_b64?.slice(0, 40)}…</span></div>
+          <p className="text-gray-400 mt-1">AES-256-GCM(DEK, plaintext) — the master key never touches your data directly.</p>
+        </div>
+      </div>
+
+      <div className="flex justify-center"><ArrowDown size={16} className="text-gray-300" /></div>
+
+      {/* Final output */}
+      <div className="rounded-lg border border-emerald-100 bg-emerald-50 px-4 py-3 text-[11px] space-y-1.5">
+        <div className="font-bold text-emerald-700 uppercase tracking-widest text-[10px] mb-2">Final Envelope Output</div>
+        <div className="flex gap-2"><span className="text-gray-500 w-32 shrink-0">Format</span><span className="font-mono text-gray-700">version(4B) + wrappedDEKLen(2B) + wrappedDEK + ciphertext</span></div>
+        <div className="flex gap-2"><span className="text-gray-500 w-32 shrink-0">Total size</span><span className="font-mono text-emerald-700">{info.ciphertext_len} bytes (base64-encoded)</span></div>
+        <div className="flex gap-2"><span className="text-gray-500 w-32 shrink-0">Key version</span><span className="font-mono text-emerald-700">v{info.key_version} (embedded — auto-detected on decrypt)</span></div>
+      </div>
+    </div>
+  );
+}
 
 export default function CryptoOps() {
   const { token } = useAuth();
@@ -16,6 +83,8 @@ export default function CryptoOps() {
   const [ciphertext, setCiphertext] = useState('');
   const [encLoading, setEncLoading] = useState(false);
   const [encError, setEncError] = useState('');
+  const [envelopeInfo, setEnvelopeInfo] = useState(null);
+  const [showEnvelope, setShowEnvelope] = useState(false);
 
   // Decrypt state
   const [decKeyId, setDecKeyId] = useState('');
@@ -36,18 +105,30 @@ export default function CryptoOps() {
     e.preventDefault();
     setEncError('');
     setCiphertext('');
+    setEnvelopeInfo(null);
     if (!encKeyId) { setEncError('Select a key.'); return; }
     if (!plaintext.trim()) { setEncError('Enter plaintext to encrypt.'); return; }
     setEncLoading(true);
     try {
-      const res = await apiFetch('/kms/encrypt', {
-        method: 'POST',
-        headers,
-        body: JSON.stringify({ key_id: encKeyId, plaintext }),
-      });
-      const data = await res.json();
-      if (!res.ok) { setEncError(data.error || 'Encryption failed'); return; }
-      setCiphertext(data.ciphertext);
+      // Run both in parallel: actual encrypt + envelope info for visualization
+      const [encRes, envRes] = await Promise.all([
+        apiFetch('/kms/encrypt', {
+          method: 'POST', headers,
+          body: JSON.stringify({ key_id: encKeyId, plaintext }),
+        }),
+        apiFetch('/kms/envelopeInfo', {
+          method: 'POST', headers,
+          body: JSON.stringify({ key_id: encKeyId, plaintext }),
+        }),
+      ]);
+      const encData = await encRes.json();
+      if (!encRes.ok) { setEncError(encData.error || 'Encryption failed'); return; }
+      setCiphertext(encData.ciphertext);
+      if (envRes.ok) {
+        const envData = await envRes.json();
+        setEnvelopeInfo(envData);
+        setShowEnvelope(true);
+      }
     } catch (e) { setEncError('Network error'); }
     finally { setEncLoading(false); }
   };
@@ -61,8 +142,7 @@ export default function CryptoOps() {
     setDecLoading(true);
     try {
       const res = await apiFetch('/kms/decrypt', {
-        method: 'POST',
-        headers,
+        method: 'POST', headers,
         body: JSON.stringify({ key_id: decKeyId, ciphertext: decCiphertext.trim() }),
       });
       const data = await res.json();
@@ -97,9 +177,14 @@ export default function CryptoOps() {
   return (
     <div className="p-8 max-w-3xl">
       <h1 className="text-3xl font-bold text-gray-900 tracking-tight mb-2">Encrypt / Decrypt</h1>
-      <p className="text-sm text-gray-500 mb-8">
-        Perform AES-256-GCM cryptographic operations. All operations are logged to the immutable audit trail.
+      <p className="text-sm text-gray-500 mb-2">
+        Envelope Encryption: HKDF-derived KEK wraps a fresh random DEK, which encrypts your data. AES-256-GCM throughout.
       </p>
+      <div className="flex items-center gap-4 mb-8 text-[11px] text-gray-400">
+        <span className="flex items-center gap-1"><Key size={10} className="text-violet-500" /> HKDF-SHA256 key derivation</span>
+        <span className="flex items-center gap-1"><Layers size={10} className="text-amber-500" /> KEK wraps DEK</span>
+        <span className="flex items-center gap-1"><Database size={10} className="text-indigo-500" /> AES-256-GCM data encryption</span>
+      </div>
 
       {/* Tabs */}
       <div className="flex gap-1 bg-gray-100 rounded-lg p-1 mb-6 w-fit">
@@ -122,32 +207,34 @@ export default function CryptoOps() {
       </div>
 
       {tab === 'encrypt' && (
-        <form onSubmit={handleEncrypt} className="space-y-5">
-          <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-5">
-            <div>
-              <label className="text-[11px] font-bold text-gray-500 tracking-widest uppercase block mb-2">Select Key</label>
-              <KeySelect value={encKeyId} onChange={setEncKeyId} placeholder="— Choose an active key —" />
+        <div className="space-y-5">
+          <form onSubmit={handleEncrypt} className="space-y-5">
+            <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-6 space-y-5">
+              <div>
+                <label className="text-[11px] font-bold text-gray-500 tracking-widest uppercase block mb-2">Select Key</label>
+                <KeySelect value={encKeyId} onChange={setEncKeyId} placeholder="— Choose an active key —" />
+              </div>
+              <div>
+                <label className="text-[11px] font-bold text-gray-500 tracking-widest uppercase block mb-2">Plaintext</label>
+                <textarea
+                  value={plaintext}
+                  onChange={e => setPlaintext(e.target.value)}
+                  rows={4}
+                  placeholder="Enter the data you want to encrypt..."
+                  className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition resize-none font-mono"
+                />
+              </div>
+              {encError && <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-lg">{encError}</div>}
+              <button
+                type="submit"
+                disabled={encLoading}
+                className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs tracking-widest uppercase py-3 rounded-lg transition-colors shadow-sm shadow-indigo-600/20 disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                <Lock size={13} />
+                {encLoading ? 'Encrypting…' : 'Encrypt with Envelope Encryption'}
+              </button>
             </div>
-            <div>
-              <label className="text-[11px] font-bold text-gray-500 tracking-widest uppercase block mb-2">Plaintext</label>
-              <textarea
-                value={plaintext}
-                onChange={e => setPlaintext(e.target.value)}
-                rows={5}
-                placeholder="Enter the data you want to encrypt..."
-                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-200 focus:border-indigo-400 transition resize-none font-mono"
-              />
-            </div>
-            {encError && <div className="p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-lg">{encError}</div>}
-            <button
-              type="submit"
-              disabled={encLoading}
-              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs tracking-widest uppercase py-3 rounded-lg transition-colors shadow-sm shadow-indigo-600/20 disabled:opacity-60 flex items-center justify-center gap-2"
-            >
-              <Lock size={13} />
-              {encLoading ? 'Encrypting...' : 'Encrypt Data'}
-            </button>
-          </div>
+          </form>
 
           {ciphertext && (
             <div className="bg-white rounded-xl border border-emerald-100 shadow-sm p-6">
@@ -166,11 +253,22 @@ export default function CryptoOps() {
                 {ciphertext}
               </div>
               <p className="text-[11px] text-gray-400 mt-2">
-                This ciphertext includes the key version prefix for automatic version-aware decryption.
+                Contains: key version prefix + wrapped DEK (AES-GCM encrypted) + ciphertext (AES-GCM encrypted). All base64.
               </p>
+              {envelopeInfo && (
+                <button
+                  onClick={() => setShowEnvelope(v => !v)}
+                  className="mt-3 flex items-center gap-2 text-xs font-semibold text-indigo-600 hover:text-indigo-800 transition-colors"
+                >
+                  <Layers size={12} />
+                  {showEnvelope ? 'Hide' : 'Show'} Envelope Encryption Breakdown
+                </button>
+              )}
             </div>
           )}
-        </form>
+
+          {showEnvelope && envelopeInfo && <EnvelopeVisualizer info={envelopeInfo} />}
+        </div>
       )}
 
       {tab === 'decrypt' && (
@@ -197,7 +295,7 @@ export default function CryptoOps() {
               className="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs tracking-widest uppercase py-3 rounded-lg transition-colors shadow-sm shadow-indigo-600/20 disabled:opacity-60 flex items-center justify-center gap-2"
             >
               <Unlock size={13} />
-              {decLoading ? 'Decrypting...' : 'Decrypt Data'}
+              {decLoading ? 'Decrypting…' : 'Decrypt Data'}
             </button>
           </div>
 
@@ -217,6 +315,9 @@ export default function CryptoOps() {
               <div className="bg-gray-50 rounded-lg p-4 font-mono text-xs text-gray-700 break-all leading-relaxed border border-gray-100 whitespace-pre-wrap">
                 {decPlaintext}
               </div>
+              <p className="text-[11px] text-gray-400 mt-2">
+                Decryption path: parse version → derive KEK via HKDF → unwrap DEK → decrypt data with DEK.
+              </p>
             </div>
           )}
         </form>

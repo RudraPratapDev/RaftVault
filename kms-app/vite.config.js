@@ -18,9 +18,9 @@ function getLocalIP() {
 }
 
 const localIP = getLocalIP()
-const NODE1 = `http://${localIP}:5001`
+const NODE1 = 'http://localhost:5001'
 
-console.log(`[vite] Proxying API to: ${NODE1}`)
+console.log(`[vite] Proxying API to: ${NODE1} (local IP: ${localIP})`)
 
 export default defineConfig({
   plugins: [react(), tailwindcss()],

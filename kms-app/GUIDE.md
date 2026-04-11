@@ -1,310 +1,213 @@
-# Glass Foundry KMS — User Guide
+# RaftVault KMS — Faculty Demo Guide
 
-A complete guide to using the Glass Foundry Key Management System application.
+This guide walks you through a complete, step-by-step demonstration of every cryptographic feature in the system. Each section explains *what* is happening, *why* it matters, and *what to show* on screen.
 
 ---
 
-## 1. Prerequisites & Setup
+## Pre-Demo Setup (5 minutes before)
 
-### Install Python Dependencies (first time only)
-
-The Security Audit feature requires Python 3.9+ and a few packages:
-
+**Terminal 1 — Start the 3-node Raft cluster:**
 ```bash
-pip3 install flask flask-cors numpy pandas scipy scikit-learn joblib tqdm --break-system-packages
+./start_cluster.sh
 ```
+Wait until you see `[RAFT] Elected leader` in one of the node logs.
 
-### Start the Backend
-
-The KMS app talks to a backend node. Start at least one node from the project root:
-
+**Terminal 2 — Start the KMS dashboard:**
 ```bash
-# Build the backend (first time only)
-go build -o bin/raft-kms ./cmd/main.go
-
-# Start node 1
-./bin/raft-kms --config configs/node1.json
+cd kms-app && npm run dev
 ```
+Open `http://localhost:5173` in your browser.
 
-For a full 3-node cluster (recommended), open three terminals:
-
-```bash
-./bin/raft-kms --config configs/node1.json   # Terminal 1
-./bin/raft-kms --config configs/node2.json   # Terminal 2
-./bin/raft-kms --config configs/node3.json   # Terminal 3
-```
-
-Node 1 listens on `localhost:5001` by default. The frontend proxies all API calls through this address.
-
-### Start the Frontend
-
-```bash
-cd kms-app
-npm install       # first time only
-npm run dev
-```
-
-Open your browser at **http://localhost:5173**
-
-### Start the BitSecure Analysis Service
-
-The Security Audit tab requires the BitSecure ML service running separately:
-
+**Terminal 3 — (Optional) Start the ML analysis service:**
 ```bash
 python3 crypto/server.py
 ```
 
-This loads the trained Random Forest models and starts a Flask server on **port 7777**. The Vite dev proxy forwards `/bitsecure/*` requests to it automatically.
+**Login credentials:**
+- Username: `admin`
+- Password / API Key: `admin-secret-key`
 
-You should see:
+---
+
+## Demo Flow
+
+---
+
+### Step 1 — Overview: The Crypto Stack at a Glance
+
+**Navigate to: Overview (home page)**
+
+Point out the "Cryptographic Stack" panel at the bottom. It shows all four crypto primitives active in the system:
+
+| Primitive | What it does |
+|-----------|-------------|
+| Envelope Encryption | KEK/DEK separation — master key never touches data |
+| HKDF-SHA256 | Derives the KEK from master secret at runtime |
+| HMAC Chain | Every audit entry is cryptographically linked |
+| RSA-OAEP | Key export — wrapped for a specific recipient |
+
+**What to say:** "This isn't just AES encryption bolted on. Every layer has a specific cryptographic purpose, and together they replicate what AWS KMS and Google Cloud KMS do internally."
+
+---
+
+### Step 2 — Key Registry: HKDF Key Derivation
+
+**Navigate to: Key Registry**
+
+1. Create a key — type `demo-key-001` and click Create.
+2. Expand the key row to see the version and master secret (truncated).
+
+**What to say:** "What's stored in Raft is a 256-bit *master secret* — raw random bytes. The actual encryption key (KEK) is *never stored*. It's derived fresh every time using HKDF-SHA256 with a context string that includes the key ID, version number, and creation timestamp. This means the same master secret produces a different KEK for every key version."
+
+**Show the HKDF context:** When you encrypt something in the next step, the Envelope Breakdown will show the exact context string used.
+
+3. Click **Rotate** on the key. A new version appears.
+
+**What to say:** "Rotating a key generates a new master secret. The HKDF context changes, so the new KEK is completely different. Old ciphertext still decrypts because the version number is embedded in the ciphertext — the system automatically picks the right version."
+
+---
+
+### Step 3 — Encrypt / Decrypt: Envelope Encryption Live
+
+**Navigate to: Encrypt / Decrypt**
+
+1. Select `demo-key-001`, type any plaintext (e.g. `"patient_id: 12345, diagnosis: confidential"`), click **Encrypt with Envelope Encryption**.
+
+2. The ciphertext appears. Click **Show Envelope Encryption Breakdown**.
+
+**Walk through each step with the faculty:**
+
+**Step 1 — HKDF-SHA256:**
+- The master secret + context string → HKDF → KEK (256-bit)
+- The KEK is shown truncated (first 8 bytes in hex)
+- "This key is derived in memory and immediately used. It is never written to disk or stored anywhere."
+
+**Step 2 — DEK Generation + Wrapping:**
+- A fresh random 256-bit DEK is generated using `crypto/rand` (OS entropy)
+- The DEK is encrypted by the KEK using AES-256-GCM → Wrapped DEK
+- "Every single encryption operation gets a unique DEK. If an attacker somehow gets one DEK, they can only decrypt one message."
+
+**Step 3 — Data Encryption:**
+- The plaintext is encrypted by the DEK using AES-256-GCM
+- "The master key never touches your data. The KEK never touches your data. Only the DEK does — and the DEK is itself encrypted."
+
+**Final output format:**
 ```
-[BitSecure] Loaded RF model for len=256
-[BitSecure] Loaded RF model for len=4096
-[BitSecure] Starting analysis server on port 7777...
+version(4B) | wrappedDEKLen(2B) | wrappedDEK(AES-GCM) | ciphertext(AES-GCM)
 ```
+"The version prefix means you can rotate keys freely — old ciphertext self-identifies which version to use for decryption."
 
-> The service is optional — all other KMS features work without it. The Security Audit page shows an "offline" indicator if it's not running.
+3. Copy the ciphertext, switch to the Decrypt tab, paste it, select the same key, decrypt.
 
----
-
-## 2. Logging In
-
-On the login screen you'll see two fields:
-
-- **Operator ID** — your username
-- **Master Key** — your API key (used as the password)
-
-Default admin credentials:
-
-| Field | Value |
-|---|---|
-| Operator ID | `admin` |
-| Master Key | `admin-secret-key` |
-
-Click **Initialize Session** to enter the dashboard.
-
-Your session is persisted in `localStorage` so you stay logged in across page refreshes. Click **Logout** in the sidebar to end your session.
+**What to say:** "Decryption reverses the process: parse version → derive KEK via HKDF → unwrap DEK → decrypt data. The master key is never used directly."
 
 ---
 
-## 3. Navigation
+### Step 4 — Audit Log: HMAC-SHA256 Chained Trail
 
-The sidebar has six sections:
+**Navigate to: Audit Log**
 
-| Section | Description |
-|---|---|
-| Overview | Dashboard with stats and recent activity |
-| Key Registry | Create, rotate, and delete cryptographic keys |
-| Encrypt / Decrypt | Perform AES-256-GCM crypto operations |
-| Audit Log | Immutable record of all crypto operations |
-| Security Audit | ML-powered randomness analysis of key material |
-| User Management | Create and remove users *(admin only)* |
+You should see entries for the ENCRYPT and DECRYPT operations just performed.
 
----
+1. Click the **expand arrow** (▼) on any entry to reveal the hash chain details.
 
-## 4. Overview
+**Show the faculty:**
+- `previous_hash` — the hash of the entry before this one
+- `current_hash` — HMAC-SHA256 of `(prev_hash | timestamp | username | action | key_id)`
+- The formula is shown inline: `HMAC-SHA256(key, "prev|timestamp|user|action|keyid")`
 
-The Overview page gives you a live snapshot of the vault:
+**What to say:** "This is a cryptographic chain — like a mini blockchain. Each entry's hash depends on the previous entry's hash. If anyone modifies entry 3 — changes the action, the timestamp, anything — entry 3's hash changes, which means entry 4's `previous_hash` no longer matches, and the chain breaks at entry 4. You can't silently tamper with history."
 
-- **Stat cards** — total active keys, crypto operations count, audit entries, and user count. Click any card to navigate to that section.
-- **Key Registry table** — the 5 most recent keys with their status and version count.
-- **Recent Activity** — the 5 most recent audit log entries (encrypt/decrypt operations).
-- **Cryptographic Health** — shows the percentage of keys that are active vs archived.
+2. Click **Verify Chain**.
 
-Click **Refresh** (top right) to reload all data from the backend.
+**What to say:** "This re-computes every HMAC from the genesis hash and checks every link. In a real forensic audit, this is how you prove the log hasn't been tampered with."
+
+The result shows: "All N entries verified. Chain is intact."
+
+**Bonus point:** "These audit entries are committed through Raft consensus — all 3 nodes hold the same chain. An attacker would need to tamper with a majority of nodes simultaneously, which is the Byzantine fault tolerance guarantee."
 
 ---
 
-## 5. Key Registry
+### Step 5 — Key Registry: RSA-OAEP Key Export
 
-### Creating a Key
+**Navigate to: Key Registry**
 
-1. Go to **Key Registry**.
-2. In the "Create New Key" form, enter a unique Key ID (e.g. `prod-db-key-001`).
-3. Click **Create Key**.
+This demonstrates the KEM (Key Encapsulation Mechanism) pattern.
 
-A 256-bit AES key is generated server-side and stored securely. You never see the raw key material in full — only a truncated preview in the version history.
-
-### Viewing Key Versions
-
-Click the chevron (▾) next to any key to expand its version history. Each rotation creates a new version. The current (latest) version is used for new encryptions; older versions are retained so existing ciphertext can still be decrypted.
-
-### Rotating a Key
-
-Click **Rotate** next to an active key. A new key version is generated and becomes the active version for future encryptions. Old ciphertext encrypted with previous versions can still be decrypted — the version is embedded in the ciphertext.
-
-### Deleting (Archiving) a Key
-
-Click **Delete** next to an active key, then confirm in the dialog. The key is soft-deleted (status changes to `deleted`). Ciphertext encrypted with a deleted key **cannot be decrypted** afterwards, so archive keys only when you're sure they're no longer needed.
-
----
-
-## 6. Encrypt / Decrypt
-
-### Encrypting Data
-
-1. Go to **Encrypt / Decrypt** and make sure the **Encrypt** tab is selected.
-2. Choose an active key from the dropdown.
-3. Enter the plaintext you want to protect.
-4. Click **Encrypt Data**.
-
-The output is a base64-encoded ciphertext that includes a version prefix. Copy it using the **Copy** button and store it wherever needed.
-
-### Decrypting Data
-
-1. Switch to the **Decrypt** tab.
-2. Select the same key that was used for encryption.
-3. Paste the ciphertext.
-4. Click **Decrypt Data**.
-
-The original plaintext is displayed. The system automatically uses the correct key version based on the version prefix embedded in the ciphertext.
-
-> Every encrypt and decrypt operation is automatically recorded in the Audit Log.
-
----
-
-## 7. Audit Log
-
-The Audit Log shows every cryptographic operation performed through the system. It is **immutable** — entries are committed through distributed consensus and cannot be modified or deleted.
-
-### Filtering
-
-- **Search box** — filter by key ID or username.
-- **Action filter** — show ALL, ENCRYPT-only, or DECRYPT-only entries.
-
-### Columns
-
-| Column | Description |
-|---|---|
-| Timestamp | When the operation occurred |
-| Action | ENCRYPT or DECRYPT |
-| Key ID | Which key was used |
-| User | Which operator performed the action |
-
-The log is displayed in reverse chronological order (newest first).
-
----
-
-## 8. User Management *(Admin only)*
-
-This section is only visible to users with the `admin` role.
-
-### Creating a User
-
-1. Go to **User Management**.
-2. Enter a username and select a role:
-   - **Service** — can encrypt and decrypt, list keys, and view the audit log.
-   - **Admin** — full access including creating/deleting keys and managing users.
-3. Click **Create User**.
-
-A unique API key is generated and displayed **once** in a banner at the top of the page. Copy it immediately and share it securely with the user — it will not be shown again (though admins can view masked keys in the table).
-
-### Viewing API Keys
-
-Click the eye icon (👁) next to any user to reveal their API key. Click **Copy** to copy it to the clipboard.
-
-### Removing a User
-
-Click **Remove** next to a user, then confirm in the dialog. The user's API key is immediately invalidated. The default `admin` user cannot be removed.
-
----
-
-## 9. Authentication
-
-The KMS uses API key authentication. The API key is sent as a Bearer token in every request:
-
-```
-Authorization: Bearer <api_key>
+**First, generate an RSA key pair in Terminal:**
+```bash
+openssl genrsa -out /tmp/demo.pem 2048
+openssl rsa -in /tmp/demo.pem -pubout -out /tmp/demo_pub.pem
+cat /tmp/demo_pub.pem
 ```
 
-When you log in, the API key is stored in `localStorage` and automatically attached to all requests by the frontend. If you need to use the API directly (e.g. from a script or another service), use the same header.
+1. On the `demo-key-001` row, click **Export**.
+2. Paste the contents of `demo_pub.pem` into the public key field.
+3. Click **Export Wrapped Key**.
+
+**What to say:** "The server takes the 256-bit key material and encrypts it with your RSA-2048 public key using RSA-OAEP-SHA256. The result is a wrapped key — it can be transmitted over any channel, stored anywhere, and only the holder of the private key can unwrap it. The key material never travels in plaintext."
+
+**Why OAEP and not PKCS#1 v1.5?** "PKCS#1 v1.5 is vulnerable to Bleichenbacher's padding oracle attack — a chosen-ciphertext attack that can recover the plaintext. OAEP uses a hash function and random padding, making it IND-CCA2 secure."
+
+**To verify the export works (optional):**
+```bash
+echo "<paste wrapped key>" | base64 -d | openssl rsautl -decrypt -oaep -inkey /tmp/demo.pem | xxd
+```
+The output should be 32 bytes of key material.
 
 ---
 
-## 10. Roles & Permissions
+### Step 6 — Crypto Internals: The Full Picture
 
-| Operation | Service | Admin |
-|---|---|---|
-| Login | ✓ | ✓ |
-| List keys | ✓ | ✓ |
-| Get key details | ✓ | ✓ |
-| Encrypt / Decrypt | ✓ | ✓ |
-| View audit log | ✓ | ✓ |
-| List users | ✓ | ✓ |
-| Create key | ✗ | ✓ |
-| Delete key | ✗ | ✓ |
-| Rotate key | ✗ | ✓ |
-| Create user | ✗ | ✓ |
-| Delete user | ✗ | ✓ |
+**Navigate to: Crypto Internals**
 
----
+This page is designed specifically for explaining the system to someone technical. Walk through each section:
 
-## 11. Troubleshooting
+1. **Envelope Encryption** — the diagram shows the full KEK/DEK flow visually
+2. **HKDF-SHA256** — shows the Extract → Expand two-step process with the actual Go code
+3. **HMAC-SHA256 Chain** — shows the chain diagram and the exact hash formula
+4. **RSA-OAEP** — shows the KEM pattern and why OAEP is used
+5. **AES-256-GCM** — explains authenticated encryption, nonce, and auth tag
+6. **Crypto Stack Summary table** — every primitive, what it's used for, and the relevant standard (NIST/RFC)
 
-**"Vault: Operational" shows but data doesn't load**
-- Make sure the backend node is running on `localhost:5001`.
-- Check the browser console for network errors.
-
-**Login fails with "invalid api key"**
-- The password field expects the API key, not a traditional password.
-- Default: `admin-secret-key`.
-
-**"not leader" errors**
-- The frontend automatically retries requests against the cluster leader. If you see this briefly, it's normal during a leader election. Wait a few seconds and try again.
-
-**Bind address error on startup**
-- If the node fails to bind, check that `configs/node1.json` uses an address available on your machine (e.g. `localhost:5001`).
-- Update `kms-app/vite.config.js` proxy target if you change the port.
-
-**Key operations fail with "forbidden"**
-- Only admin users can create, rotate, or delete keys. Log in with an admin account.
-
-**BitSecure shows "offline"**
-- Run `python3 crypto/server.py` from the project root.
-- Make sure the Python dependencies are installed: `pip3 install flask flask-cors numpy pandas scipy scikit-learn joblib tqdm --break-system-packages`
-- The service must be on port 7777.
+**What to say:** "Every primitive here is a real-world standard. AES-256-GCM is NIST FIPS 197. HKDF is RFC 5869. HMAC is RFC 2104. RSA-OAEP is PKCS#1 v2.2. This isn't academic — this is exactly how production KMS systems are built."
 
 ---
 
-## 12. Security Audit (BitSecure)
+### Step 7 — Security Audit: ML Randomness Analysis
 
-The Security Audit page uses a trained Random Forest classifier to analyze the randomness quality of your key material. This is the BitSecure ML pipeline integrated directly into the KMS.
+**Navigate to: Security Audit** (requires `python3 crypto/server.py` running)
 
-### How It Works
+1. Select `demo-key-001`, click **Run Audit**.
 
-1. You select an active key from the dropdown.
-2. The frontend fetches the key's raw base64 material from the Go backend (`/kms/keyMaterial`).
-3. That material is sent to the local BitSecure Python service (`/bitsecure/analyze`).
-4. The service extracts 18 statistical features from the key's bits and runs them through the trained model.
-5. Results are displayed in the dashboard — no key material ever leaves your local network.
+**What to say:** "This runs 18 statistical tests on the key's raw bytes — bit frequency, run length, autocorrelation, NIST SP 800-22 tests, and a Random Forest classifier trained on 320,000 bit sequences from 8 different generators. It tells you whether the key material looks like it came from a cryptographically secure source or a weak PRNG."
 
-### What You See
+Show the verdict, NIST test results, and bit heatmap.
 
-**ML Verdict** — the Random Forest's classification: `SECURE` or `POTENTIALLY WEAK`, with a probability breakdown and confidence score.
+---
 
-**Bit Heatmap** — a 16×16 grid showing the first 256 bits of the key. Indigo = 1, white = 0. A truly random key should look like noise with no visible patterns.
+## Key Talking Points for Q&A
 
-**Byte Distribution** — a bar chart of the first 32 byte values. Secure keys have roughly uniform distribution.
+**"Why not just use AES directly with the master key?"**
+Envelope encryption means key rotation is cheap (re-wrap the DEK, not re-encrypt all data), and compromise of one DEK only exposes one message, not everything encrypted with that key.
 
-**Autocorrelation Profile** — serial correlation at lags 1–5. Values near 0 mean bits are independent. High values (shown in amber) indicate structure — a hallmark of weak PRNGs like LCGs and LFSRs.
+**"Why HKDF instead of using the random bytes directly?"**
+HKDF provides domain separation — the same master secret produces different keys for different purposes (different key IDs, versions). It also provides key stretching and ensures the output has the right statistical properties regardless of the input's distribution.
 
-**NIST SP 800-22 Tests** — three core NIST randomness tests run locally:
-- Frequency (Monobit) — proportion of 1s should be ~0.5
-- Runs Test — oscillation rate between 0s and 1s
-- Block Frequency — frequency within 128-bit blocks
+**"How is the audit trail different from a regular database log?"**
+A database log can be modified by anyone with DB access. This chain requires an attacker to recompute all subsequent HMACs (which requires the HMAC key) AND update all nodes in the Raft cluster simultaneously. The chain is also replicated — you can't tamper with one node without the others detecting the divergence.
 
-**Feature Importance** — which of the 18 statistical features the model weighted most heavily for this prediction.
+**"What's the threat model for RSA-OAEP export?"**
+It solves the key distribution problem. You want to give a service its encryption key, but you can't send it in plaintext. The service generates an RSA key pair, sends you the public key, you wrap the KMS key with it, and only the service can unwrap it. This is exactly how TLS key exchange works.
 
-**All 18 Features** — the raw computed values for every feature used by the model.
+---
 
-### Model Performance
+## Crypto Primitives Reference
 
-The Random Forest was trained on 320,000 bit sequences from 8 generators (5 weak: LCG, LFSR, MT19937, RC4-weak, C-rand; 3 secure: /dev/urandom, AES-CTR-DRBG, ChaCha20):
-
-| Sequence Length | ROC-AUC | Notes |
-|---|---|---|
-| 256 bits | 0.958 | Higher false-positive rate at short lengths |
-| 4096 bits | 0.947 | Good discrimination |
-| 16384 bits | 0.975 | Best performance |
-
-Keys generated by this system use Go's `crypto/rand` (backed by the OS CSPRNG) and will typically score as secure. A "Potentially Weak" result at 256 bits is not alarming — the model has a higher false-positive rate at short lengths. It's a signal to investigate, not a definitive failure.
+| Primitive | Standard | Key Size | Security Level |
+|-----------|----------|----------|----------------|
+| AES-256-GCM | NIST FIPS 197 + SP 800-38D | 256-bit | 128-bit security |
+| HKDF-SHA256 | RFC 5869 | Variable | Depends on IKM |
+| HMAC-SHA256 | RFC 2104 + FIPS 198 | 256-bit | 128-bit security |
+| RSA-OAEP-SHA256 | PKCS#1 v2.2 / RFC 8017 | 2048-bit | ~112-bit security |
+| crypto/rand | OS entropy (urandom) | — | CSPRNG |

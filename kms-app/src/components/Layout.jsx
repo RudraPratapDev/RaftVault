@@ -2,7 +2,7 @@ import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import {
   LayoutDashboard, KeyRound, ShieldCheck, Users, ScrollText,
-  LogOut, HelpCircle, Lock, ShieldAlert
+  LogOut, HelpCircle, Lock, ShieldAlert, Layers
 } from 'lucide-react';
 
 const NAV = [
@@ -10,6 +10,7 @@ const NAV = [
   { to: '/keys', label: 'Key Registry', icon: KeyRound },
   { to: '/crypto', label: 'Encrypt / Decrypt', icon: ShieldCheck },
   { to: '/audit', label: 'Audit Log', icon: ScrollText },
+  { to: '/internals', label: 'Crypto Internals', icon: Layers },
   { to: '/security', label: 'Security Audit', icon: ShieldAlert },
 ];
 
@@ -120,7 +121,7 @@ export default function Layout() {
             Vault: Operational
           </div>
           <div className="text-[10px] font-bold text-gray-400 tracking-widest uppercase">
-            AES-256-GCM · Raft Consensus
+            AES-256-GCM · HKDF-SHA256 · RSA-OAEP · HMAC Chain
           </div>
         </div>
 

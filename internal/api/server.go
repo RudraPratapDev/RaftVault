@@ -103,6 +103,8 @@ func (s *Server) Start() error {
 	mux.HandleFunc("/kms/decrypt", s.cors(s.chaosMiddleware(s.requireAuth(s.handleDecrypt))))
 	mux.HandleFunc("/kms/keyMaterial", s.cors(s.chaosMiddleware(s.requireAuth(s.handleKeyMaterial))))
 	mux.HandleFunc("/kms/exportKey", s.cors(s.chaosMiddleware(s.requireAuth(s.handleExportKey))))
+	mux.HandleFunc("/kms/verifyChain", s.cors(s.chaosMiddleware(s.requireAuth(s.handleVerifyChain))))
+	mux.HandleFunc("/kms/envelopeInfo", s.cors(s.chaosMiddleware(s.requireAuth(s.handleEnvelopeInfo))))
 
 	// Public KMS endpoints
 	mux.HandleFunc("/kms/login", s.cors(s.chaosMiddleware(s.handleLogin)))
@@ -731,6 +733,40 @@ func (s *Server) handleAuditLog(w http.ResponseWriter, r *http.Request) {
 	}
 	trail := s.kmsStore.GetAuditTrail()
 	writeJSON(w, http.StatusOK, map[string]interface{}{"audit_trail": trail})
+}
+
+func (s *Server) handleVerifyChain(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	result := s.kmsStore.VerifyAuditChain()
+	writeJSON(w, http.StatusOK, result)
+}
+
+// handleEnvelopeInfo performs a live envelope encryption and returns all intermediate
+// values so the dashboard can visualize the KEK/DEK layers for demo purposes.
+func (s *Server) handleEnvelopeInfo(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		KeyID     string `json:"key_id"`
+		Plaintext string `json:"plaintext"`
+	}
+	if err := readJSON(r, &req); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
+
+	info, err := s.kmsStore.EnvelopeEncryptWithInfo(req.KeyID, req.Plaintext)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	writeJSON(w, http.StatusOK, info)
 }
 
 func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {

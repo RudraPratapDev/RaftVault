@@ -178,20 +178,31 @@ export default function Overview() {
       {/* Crypto Health */}
       <div className="mt-6 bg-indigo-600 rounded-xl p-6 text-white relative overflow-hidden shadow-lg shadow-indigo-600/20">
         <div className="absolute -right-6 -top-6 w-40 h-40 bg-indigo-500/40 rounded-full blur-2xl pointer-events-none"></div>
-        <div className="relative z-10 flex items-center justify-between">
-          <div>
-            <div className="text-[10px] font-bold tracking-widest uppercase text-indigo-200 mb-1">Security Layer</div>
-            <h3 className="text-lg font-bold mb-1">Cryptographic Health</h3>
-            <p className="text-xs text-indigo-200 max-w-sm leading-relaxed">
-              AES-256-GCM encryption active. {activeKeys} key{activeKeys !== 1 ? 's' : ''} operational.
-              {deletedKeys > 0 ? ` ${deletedKeys} archived.` : ''}
-            </p>
-          </div>
-          <div className="text-right">
-            <div className="text-4xl font-bold tracking-tighter">
-              {keys.length === 0 ? '—' : `${Math.round((activeKeys / keys.length) * 100)}%`}
+        <div className="relative z-10">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <div className="text-[10px] font-bold tracking-widest uppercase text-indigo-200 mb-1">Security Layer</div>
+              <h3 className="text-lg font-bold mb-1">Cryptographic Stack</h3>
             </div>
-            <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest">Key Health</div>
+            <div className="text-right">
+              <div className="text-4xl font-bold tracking-tighter">
+                {keys.length === 0 ? '—' : `${Math.round((activeKeys / keys.length) * 100)}%`}
+              </div>
+              <div className="text-[10px] font-bold text-indigo-200 uppercase tracking-widest">Key Health</div>
+            </div>
+          </div>
+          <div className="grid grid-cols-4 gap-3">
+            {[
+              { label: 'Envelope Enc.', sub: 'KEK/DEK separation' },
+              { label: 'HKDF-SHA256', sub: 'Key derivation' },
+              { label: 'HMAC Chain', sub: 'Tamper-evident audit' },
+              { label: 'RSA-OAEP', sub: 'Key export / KEM' },
+            ].map(({ label, sub }) => (
+              <div key={label} className="bg-indigo-500/40 rounded-lg px-3 py-2.5 text-center">
+                <div className="text-xs font-bold text-white">{label}</div>
+                <div className="text-[10px] text-indigo-200 mt-0.5">{sub}</div>
+              </div>
+            ))}
           </div>
         </div>
       </div>

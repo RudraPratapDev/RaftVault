@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { apiFetch } from '../utils/api';
-import { Plus, Trash2, RefreshCw, ChevronDown, ChevronUp, KeyRound, AlertTriangle } from 'lucide-react';
+import { Plus, Trash2, RefreshCw, ChevronDown, ChevronUp, KeyRound, AlertTriangle, Upload, Copy, Check, ShieldCheck, X } from 'lucide-react';
 
 export default function Keys() {
   const { token, user } = useAuth();
@@ -17,6 +17,12 @@ export default function Keys() {
   const [success, setSuccess] = useState('');
   const [actionLoading, setActionLoading] = useState({});
   const [confirmDelete, setConfirmDelete] = useState(null);
+  const [exportModal, setExportModal] = useState(null); // keyId being exported
+  const [exportPubKey, setExportPubKey] = useState('');
+  const [exportResult, setExportResult] = useState('');
+  const [exportLoading, setExportLoading] = useState(false);
+  const [exportError, setExportError] = useState('');
+  const [exportCopied, setExportCopied] = useState(false);
 
   const fetchKeys = async () => {
     setLoading(true);
@@ -89,6 +95,37 @@ export default function Keys() {
 
   const toggleExpand = (keyId) => setExpanded(p => ({ ...p, [keyId]: !p[keyId] }));
 
+  const openExport = (keyId) => {
+    setExportModal(keyId);
+    setExportPubKey('');
+    setExportResult('');
+    setExportError('');
+  };
+
+  const handleExport = async () => {
+    if (!exportPubKey.trim()) { setExportError('Paste your RSA public key in PEM format.'); return; }
+    setExportLoading(true);
+    setExportError('');
+    setExportResult('');
+    try {
+      const res = await apiFetch('/kms/exportKey', {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ key_id: exportModal, public_key: exportPubKey.trim() }),
+      });
+      const data = await res.json();
+      if (!res.ok) { setExportError(data.error || 'Export failed'); return; }
+      setExportResult(data.wrapped_key);
+    } catch (e) { setExportError('Network error'); }
+    finally { setExportLoading(false); }
+  };
+
+  const copyExport = () => {
+    navigator.clipboard.writeText(exportResult);
+    setExportCopied(true);
+    setTimeout(() => setExportCopied(false), 2000);
+  };
+
   return (
     <div className="p-8 max-w-4xl">
       <div className="flex items-center justify-between mb-2">
@@ -98,7 +135,7 @@ export default function Keys() {
           Refresh
         </button>
       </div>
-      <p className="text-sm text-gray-500 mb-8">Manage cryptographic keys. All operations are committed through consensus and logged immutably.</p>
+      <p className="text-sm text-gray-500 mb-8">Manage cryptographic keys. Master secrets are stored in Raft. KEKs are derived via HKDF-SHA256 at runtime — never stored. All operations committed through consensus.</p>
 
       {error && <div className="mb-4 p-3 bg-red-50 border border-red-100 text-red-600 text-sm rounded-lg">{error}</div>}
       {success && <div className="mb-4 p-3 bg-emerald-50 border border-emerald-100 text-emerald-700 text-sm rounded-lg">{success}</div>}
@@ -124,7 +161,7 @@ export default function Keys() {
               {creating ? 'Creating...' : 'Create Key'}
             </button>
           </div>
-          <p className="text-[11px] text-gray-400 mt-2">A 256-bit AES key will be generated and stored securely.</p>
+          <p className="text-[11px] text-gray-400 mt-2">A 256-bit master secret is generated. The actual KEK is derived via HKDF-SHA256 at encryption time — never stored directly.</p>
         </form>
       )}
 
@@ -173,6 +210,13 @@ export default function Keys() {
                         >
                           <RefreshCw size={12} className={actionLoading[key.key_id + '_rotate'] ? 'animate-spin' : ''} />
                           Rotate
+                        </button>
+                        <button
+                          onClick={() => openExport(key.key_id)}
+                          className="flex items-center gap-1.5 text-xs font-semibold text-violet-600 hover:text-violet-800 transition-colors"
+                        >
+                          <Upload size={12} />
+                          Export
                         </button>
                         <button
                           onClick={() => setConfirmDelete(key.key_id)}
@@ -238,6 +282,74 @@ export default function Keys() {
                 {actionLoading[confirmDelete + '_delete'] ? 'Archiving...' : 'Archive Key'}
               </button>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* RSA-OAEP Export Modal */}
+      {exportModal && (
+        <div className="fixed inset-0 bg-black/30 backdrop-blur-sm flex items-center justify-center z-50">
+          <div className="bg-white rounded-2xl shadow-xl p-8 max-w-lg w-full mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-violet-50 flex items-center justify-center">
+                  <ShieldCheck size={18} className="text-violet-600" />
+                </div>
+                <div>
+                  <h3 className="text-base font-bold text-gray-900">RSA-OAEP Key Export</h3>
+                  <p className="text-[11px] text-gray-400 font-mono">{exportModal}</p>
+                </div>
+              </div>
+              <button onClick={() => setExportModal(null)} className="text-gray-400 hover:text-gray-600">
+                <X size={18} />
+              </button>
+            </div>
+
+            <div className="bg-violet-50 border border-violet-100 rounded-lg p-3 mb-4 text-[11px] text-violet-700 leading-relaxed">
+              The key material will be wrapped (encrypted) with your RSA public key using RSA-OAEP-SHA256.
+              Only the holder of the corresponding private key can unwrap it. The key never travels in plaintext.
+            </div>
+
+            <div className="mb-4">
+              <label className="text-[11px] font-bold text-gray-500 tracking-widest uppercase block mb-2">Your RSA Public Key (PEM)</label>
+              <textarea
+                value={exportPubKey}
+                onChange={e => setExportPubKey(e.target.value)}
+                rows={6}
+                placeholder={"-----BEGIN PUBLIC KEY-----\nMIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8A...\n-----END PUBLIC KEY-----"}
+                className="w-full border border-gray-200 rounded-lg px-4 py-3 text-xs font-mono focus:outline-none focus:ring-2 focus:ring-violet-200 focus:border-violet-400 transition resize-none"
+              />
+              <p className="text-[10px] text-gray-400 mt-1">Generate with: <code className="bg-gray-100 px-1 rounded">openssl genrsa 2048 | openssl rsa -pubout</code></p>
+            </div>
+
+            {exportError && <div className="mb-3 p-3 bg-red-50 border border-red-100 text-red-600 text-xs rounded-lg">{exportError}</div>}
+
+            {exportResult ? (
+              <div className="mb-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[11px] font-bold text-violet-600 uppercase tracking-widest">Wrapped Key (RSA-OAEP)</span>
+                  <button onClick={copyExport} className="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-violet-600 transition-colors">
+                    {exportCopied ? <Check size={12} className="text-emerald-500" /> : <Copy size={12} />}
+                    {exportCopied ? 'Copied!' : 'Copy'}
+                  </button>
+                </div>
+                <div className="bg-gray-50 rounded-lg p-3 font-mono text-[10px] text-gray-700 break-all border border-gray-100 max-h-32 overflow-y-auto">
+                  {exportResult}
+                </div>
+                <p className="text-[10px] text-gray-400 mt-1">
+                  Decrypt with: <code className="bg-gray-100 px-1 rounded">openssl rsautl -decrypt -oaep -inkey private.pem</code>
+                </p>
+              </div>
+            ) : (
+              <button
+                onClick={handleExport}
+                disabled={exportLoading}
+                className="w-full bg-violet-600 hover:bg-violet-700 text-white font-bold text-xs tracking-widest uppercase py-3 rounded-lg transition-colors disabled:opacity-60 flex items-center justify-center gap-2"
+              >
+                <Upload size={13} />
+                {exportLoading ? 'Wrapping Key…' : 'Export Wrapped Key'}
+              </button>
+            )}
           </div>
         </div>
       )}

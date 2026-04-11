@@ -270,11 +270,11 @@ func (s *KMSStore) applyDeleteUser(p DeleteUserPayload) (interface{}, error) {
 func (s *KMSStore) applyAuditLog(p AuditLogPayload) (interface{}, error) {
 	p.Entry.PreviousHash = s.lastHash
 	mac := hmac.New(sha256.New, s.auditHMACKey)
-	
+
 	// Create canonical payload data for hashing (without CurrentHash)
 	data := fmt.Sprintf("%s|%s|%s|%s|%s", p.Entry.PreviousHash, p.Entry.Timestamp, p.Entry.Username, p.Entry.Action, p.Entry.KeyID)
 	mac.Write([]byte(data))
-	
+
 	p.Entry.CurrentHash = fmt.Sprintf("%x", mac.Sum(nil))
 	s.lastHash = p.Entry.CurrentHash
 
@@ -340,6 +340,63 @@ func (s *KMSStore) GetAuditTrail() []AuditEntry {
 	trail := make([]AuditEntry, len(s.auditTrail))
 	copy(trail, s.auditTrail)
 	return trail
+}
+
+// ChainVerificationResult holds the result of verifying the audit chain
+type ChainVerificationResult struct {
+	Valid        bool   `json:"valid"`
+	TotalEntries int    `json:"total_entries"`
+	BrokenAt     int    `json:"broken_at"` // -1 if intact
+	Message      string `json:"message"`
+}
+
+// VerifyAuditChain re-computes every HMAC in the chain and checks linkage
+func (s *KMSStore) VerifyAuditChain() ChainVerificationResult {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	if len(s.auditTrail) == 0 {
+		return ChainVerificationResult{Valid: true, TotalEntries: 0, BrokenAt: -1, Message: "Chain is empty — nothing to verify."}
+	}
+
+	genesis := "0000000000000000000000000000000000000000000000000000000000000000"
+	prevHash := genesis
+
+	for i, entry := range s.auditTrail {
+		// Verify the previous hash pointer is correct
+		if entry.PreviousHash != prevHash {
+			return ChainVerificationResult{
+				Valid:        false,
+				TotalEntries: len(s.auditTrail),
+				BrokenAt:     i,
+				Message:      fmt.Sprintf("Chain broken at entry %d: previous_hash mismatch", i),
+			}
+		}
+
+		// Re-compute the HMAC for this entry
+		mac := hmac.New(sha256.New, s.auditHMACKey)
+		data := fmt.Sprintf("%s|%s|%s|%s|%s", entry.PreviousHash, entry.Timestamp, entry.Username, entry.Action, entry.KeyID)
+		mac.Write([]byte(data))
+		expected := fmt.Sprintf("%x", mac.Sum(nil))
+
+		if entry.CurrentHash != expected {
+			return ChainVerificationResult{
+				Valid:        false,
+				TotalEntries: len(s.auditTrail),
+				BrokenAt:     i,
+				Message:      fmt.Sprintf("Chain broken at entry %d: HMAC mismatch — entry may have been tampered with", i),
+			}
+		}
+
+		prevHash = entry.CurrentHash
+	}
+
+	return ChainVerificationResult{
+		Valid:        true,
+		TotalEntries: len(s.auditTrail),
+		BrokenAt:     -1,
+		Message:      fmt.Sprintf("All %d entries verified. Chain is intact.", len(s.auditTrail)),
+	}
 }
 
 // hkdfExtract implements HKDF-Extract
@@ -480,7 +537,7 @@ func (s *KMSStore) Decrypt(keyID string, ciphertextB64 string) (string, error) {
 	// Extract version and lengths
 	version := int(binary.BigEndian.Uint32(combined[:4]))
 	wrappedDEKLen := int(binary.BigEndian.Uint16(combined[4:6]))
-	
+
 	if 6+wrappedDEKLen > len(combined) {
 		return "", fmt.Errorf("malformed ciphertext: wrapped DEK length exceeds bounds")
 	}
@@ -549,4 +606,90 @@ func (s *KMSStore) Decrypt(keyID string, ciphertextB64 string) (string, error) {
 // Now returns current time as ISO string
 func Now() string {
 	return time.Now().UTC().Format(time.RFC3339)
+}
+
+// EnvelopeInfo holds all intermediate values from an envelope encryption for demo/visualization
+type EnvelopeInfo struct {
+	KeyID      string `json:"key_id"`
+	KeyVersion int    `json:"key_version"`
+	// HKDF
+	HKDFInfo string `json:"hkdf_info"` // context string used as HKDF info param
+	KEKHex   string `json:"kek_hex"`   // first 8 bytes of derived KEK (hex, truncated for display)
+	// DEK
+	DEKHex        string `json:"dek_hex"`         // first 8 bytes of random DEK (hex, truncated)
+	WrappedDEKB64 string `json:"wrapped_dek_b64"` // AES-GCM(KEK, DEK) base64
+	// Ciphertext
+	CiphertextB64  string `json:"ciphertext_b64"`   // AES-GCM(DEK, plaintext) base64
+	FinalOutputB64 string `json:"final_output_b64"` // full envelope output
+	// Sizes
+	PlaintextLen  int `json:"plaintext_len"`
+	CiphertextLen int `json:"ciphertext_len"`
+	WrappedDEKLen int `json:"wrapped_dek_len"`
+}
+
+// EnvelopeEncryptWithInfo encrypts and returns all intermediate values for visualization
+func (s *KMSStore) EnvelopeEncryptWithInfo(keyID string, plaintext string) (*EnvelopeInfo, error) {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+
+	key, exists := s.keys[keyID]
+	if !exists {
+		return nil, fmt.Errorf("key %s not found", keyID)
+	}
+	if key.Status == "deleted" {
+		return nil, fmt.Errorf("key %s is deleted", keyID)
+	}
+
+	latestVersion := key.Versions[len(key.Versions)-1]
+	masterBytes, err := base64.StdEncoding.DecodeString(latestVersion.KeyMaterial)
+	if err != nil {
+		return nil, fmt.Errorf("failed to decode key material: %w", err)
+	}
+
+	// 1. Derive KEK using HKDF
+	hkdfInfoStr := fmt.Sprintf("%s:%d:%s", key.KeyID, latestVersion.Version, latestVersion.CreatedAt)
+	info := []byte(hkdfInfoStr)
+	kek := HKDF(masterBytes, nil, info, 32)
+
+	kekBlock, _ := aes.NewCipher(kek)
+	kekGCM, _ := cipher.NewGCM(kekBlock)
+
+	// 2. Generate random DEK
+	dek := make([]byte, 32)
+	io.ReadFull(rand.Reader, dek)
+
+	// 3. Wrap DEK with KEK
+	kekNonce := make([]byte, kekGCM.NonceSize())
+	io.ReadFull(rand.Reader, kekNonce)
+	wrappedDEK := kekGCM.Seal(kekNonce, kekNonce, dek, nil)
+
+	// 4. Encrypt data with DEK
+	dekBlock, _ := aes.NewCipher(dek)
+	dekGCM, _ := cipher.NewGCM(dekBlock)
+	dekNonce := make([]byte, dekGCM.NonceSize())
+	io.ReadFull(rand.Reader, dekNonce)
+	ciphertext := dekGCM.Seal(dekNonce, dekNonce, []byte(plaintext), nil)
+
+	// 5. Assemble final output
+	versionBytes := make([]byte, 4)
+	binary.BigEndian.PutUint32(versionBytes, uint32(latestVersion.Version))
+	wrappedDEKLen := make([]byte, 2)
+	binary.BigEndian.PutUint16(wrappedDEKLen, uint16(len(wrappedDEK)))
+	combined := append(versionBytes, wrappedDEKLen...)
+	combined = append(combined, wrappedDEK...)
+	combined = append(combined, ciphertext...)
+
+	return &EnvelopeInfo{
+		KeyID:          keyID,
+		KeyVersion:     latestVersion.Version,
+		HKDFInfo:       hkdfInfoStr,
+		KEKHex:         fmt.Sprintf("%x...", kek[:8]),
+		DEKHex:         fmt.Sprintf("%x...", dek[:8]),
+		WrappedDEKB64:  base64.StdEncoding.EncodeToString(wrappedDEK),
+		CiphertextB64:  base64.StdEncoding.EncodeToString(ciphertext),
+		FinalOutputB64: base64.StdEncoding.EncodeToString(combined),
+		PlaintextLen:   len(plaintext),
+		CiphertextLen:  len(combined),
+		WrappedDEKLen:  len(wrappedDEK),
+	}, nil
 }
